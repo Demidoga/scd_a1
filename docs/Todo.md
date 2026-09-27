@@ -2,245 +2,247 @@
 
 ## 0. Project Setup
 
--   [ ] Create GitHub repository.
+-   [x] Create GitHub repository.
 -   [ ] Add both team members.
--   [ ] Create `main` and `dev` branches.
+-   [x] Create `main` and `dev` branches.
 -   [ ] Protect `main`.
 -   [ ] Require PRs for `main`.
 -   [ ] Require CI checks for `main`.
 -   [ ] Require at least one approval.
--   [ ] Create initial repository structure.
--   [ ] Add `.gitignore`.
--   [ ] Add `.env.example`.
--   [ ] Ensure `.env` is ignored.
--   [ ] Create `README.md`.
--   [ ] Create `LICENSE`.
+-   [x] Create initial repository structure.
+-   [x] Add `.gitignore`.
+-   [x] Add `.env.example`.
+-   [x] Ensure `.env` is ignored.
+-   [x] Create `README.md`.
+-   [x] Create `LICENSE`.
 
 ## 1. Backend Foundation
 
--   [ ] Set up FastAPI + Pydantic v2.
--   [ ] Create four backend layers.
--   [ ] Create `routes/`.
--   [ ] Create `services/`.
--   [ ] Create `repositories/`.
--   [ ] Create `providers/`.
--   [ ] Keep SQL inside repositories.
--   [ ] Keep business rules inside services.
--   [ ] Keep routes HTTP-only.
--   [ ] Add dependency injection.
--   [ ] Add request validation.
--   [ ] Add field-level error responses.
--   [ ] Add request ID middleware.
--   [ ] Add structured JSON logging.
--   [ ] Log to stdout.
--   [ ] Propagate `X-Request-ID`.
--   [ ] Generate request ID when absent.
--   [ ] Add graceful SIGTERM shutdown.
--   [ ] Drain in-flight requests.
--   [ ] Close database connections on shutdown.
+-   [x] Set up FastAPI + Pydantic v2.
+-   [x] Create four backend layers.
+-   [x] Create `routes/`.
+-   [x] Create `services/`.
+-   [x] Create `repositories/`.
+-   [x] Create `providers/`.
+-   [x] Keep SQL inside repositories.
+-   [x] Keep business rules inside services.
+-   [x] Keep routes HTTP-only.
+-   [x] Add dependency injection.
+-   [x] Add request validation.
+-   [x] Add field-level error responses.
+-   [x] Add request ID middleware.
+-   [x] Add structured JSON logging.
+-   [x] Log to stdout.
+-   [x] Propagate `X-Request-ID`.
+-   [x] Generate request ID when absent.
+-   [x] Add graceful SIGTERM shutdown.
+-   [x] Drain in-flight requests.
+-   [x] Close database connections on shutdown.
 
 ## 2. Database
 
--   [ ] Set up PostgreSQL 16.
--   [ ] Set up Alembic.
--   [ ] Create initial migration.
--   [ ] Avoid startup-time DDL.
--   [ ] Create UUID primary key.
--   [ ] Enforce complaint text length 10--2000.
--   [ ] Enforce location length 3--200.
--   [ ] Add nullable reporter contact.
--   [ ] Add category enum.
--   [ ] Add priority enum.
--   [ ] Add status enum.
--   [ ] Default status to `open`.
--   [ ] Add nullable AI summary.
--   [ ] Limit AI summary to 140 characters.
--   [ ] Add `triaged_by`.
--   [ ] Add `triage_latency_ms`.
--   [ ] Add UTC timestamps.
--   [ ] Add `(status, priority)` index.
--   [ ] Add `created_at` index.
--   [ ] Document the purpose of both indexes.
--   [ ] Create idempotent seed command.
--   [ ] Seed at least 30 complaints.
--   [ ] Use Urdu-influenced English complaints.
--   [ ] Spread seed data across categories.
--   [ ] Verify seed runs twice without duplicates.
+-   [ ] Set up PostgreSQL 16. (local dev sandbox runs 17; `postgres:16` is pinned only in the not-yet-built Compose/K8s artifacts — documented gap in `docs/ENGINEERING-NOTES.md`)
+-   [x] Set up Alembic.
+-   [x] Create initial migration.
+-   [x] Avoid startup-time DDL.
+-   [x] Create UUID primary key.
+-   [x] Enforce complaint text length 10--2000.
+-   [x] Enforce location length 3--200.
+-   [x] Add nullable reporter contact.
+-   [x] Add category enum.
+-   [x] Add priority enum.
+-   [x] Add status enum.
+-   [x] Default status to `open`.
+-   [x] Add nullable AI summary.
+-   [x] Limit AI summary to 140 characters.
+-   [x] Add `triaged_by`.
+-   [x] Add `triage_latency_ms`.
+-   [x] Add UTC timestamps.
+-   [x] Add `(status, priority)` index.
+-   [x] Add `created_at` index.
+-   [x] Document the purpose of both indexes.
+-   [x] Create idempotent seed command.
+-   [x] Seed at least 30 complaints. (36, `backend/app/seed_data.py`)
+-   [x] Use Urdu-influenced English complaints.
+-   [x] Spread seed data across categories. (all 6)
+-   [ ] Verify seed runs twice without duplicates. (idempotency check exists in code, not demonstrated/tested)
 -   [ ] Verify Compose restart preserves data.
 -   [ ] Verify Kubernetes Postgres pod deletion preserves data.
 
 ## 3. API
 
--   [ ] Implement `POST /api/complaints`.
--   [ ] Return `201` on successful creation.
--   [ ] Return `400` for validation errors.
--   [ ] Return `429` when rate limited.
--   [ ] Implement `GET /api/complaints/{id}`.
--   [ ] Return `404` for missing complaints.
--   [ ] Implement `GET /api/complaints`.
--   [ ] Add category filtering.
--   [ ] Add priority filtering.
--   [ ] Add status filtering.
--   [ ] Add pagination.
--   [ ] Enforce `page_size <= 100`.
--   [ ] Return total count.
--   [ ] Implement `PATCH /api/complaints/{id}/status`.
--   [ ] Return `409` for invalid transitions.
--   [ ] Include attempted transition in `409`.
--   [ ] Implement `GET /api/stats`.
--   [ ] Add `X-Cache` response header.
--   [ ] Implement `GET /api/meta/providers`.
--   [ ] Return active provider.
--   [ ] Return last 20 triage outcomes.
--   [ ] Include provider and latency.
--   [ ] Include fallback status.
--   [ ] Implement `GET /health`.
--   [ ] Keep `/health` independent of the database.
--   [ ] Implement `GET /ready`.
--   [ ] Check PostgreSQL in readiness.
--   [ ] Check Redis in readiness.
--   [ ] Return `503` with failed dependency when unavailable.
--   [ ] Implement `GET /metrics`.
--   [ ] Expose request count.
--   [ ] Expose request latency histogram.
--   [ ] Expose triage latency.
--   [ ] Expose fallback counter.
+-   [x] Implement `POST /api/complaints`.
+-   [x] Return `201` on successful creation.
+-   [x] Return `400` for validation errors.
+-   [x] Return `429` when rate limited.
+-   [x] Implement `GET /api/complaints/{id}`.
+-   [x] Return `404` for missing complaints.
+-   [x] Implement `GET /api/complaints`.
+-   [x] Add category filtering.
+-   [x] Add priority filtering.
+-   [x] Add status filtering.
+-   [x] Add pagination.
+-   [x] Enforce `page_size <= 100`.
+-   [x] Return total count.
+-   [x] Implement `PATCH /api/complaints/{id}/status`.
+-   [x] Return `409` for invalid transitions.
+-   [x] Include attempted transition in `409`.
+-   [x] Implement `GET /api/stats`.
+-   [x] Add `X-Cache` response header.
+-   [x] Implement `GET /api/meta/providers`.
+-   [x] Return active provider.
+-   [x] Return last 20 triage outcomes.
+-   [x] Include provider and latency.
+-   [x] Include fallback status.
+-   [x] Implement `GET /health`.
+-   [x] Keep `/health` independent of the database.
+-   [x] Implement `GET /ready`.
+-   [x] Check PostgreSQL in readiness.
+-   [x] Check Redis in readiness.
+-   [x] Return `503` with failed dependency when unavailable.
+-   [x] Implement `GET /metrics`.
+-   [x] Expose request count.
+-   [x] Expose request latency histogram.
+-   [x] Expose triage latency.
+-   [x] Expose fallback counter.
 
 ## 4. Complaint State Machine
 
--   [ ] Define explicit transition table.
--   [ ] Allow `open → in_progress`.
--   [ ] Allow `in_progress → resolved`.
--   [ ] Allow `open → rejected`.
--   [ ] Allow `in_progress → rejected`.
--   [ ] Make `resolved` terminal.
--   [ ] Make `rejected` terminal.
--   [ ] Reject all other transitions with `409`.
--   [ ] Keep transition rules out of the frontend.
+-   [x] Define explicit transition table.
+-   [x] Allow `open → in_progress`.
+-   [x] Allow `in_progress → resolved`.
+-   [x] Allow `open → rejected`.
+-   [x] Allow `in_progress → rejected`.
+-   [x] Make `resolved` terminal.
+-   [x] Make `rejected` terminal.
+-   [x] Reject all other transitions with `409`.
+-   [x] Keep transition rules out of the frontend.
 
 ## 5. Redis
 
--   [ ] Set up Redis 7.
--   [ ] Implement read-through stats cache.
--   [ ] Set stats TTL to 30 seconds.
--   [ ] Return `X-Cache: HIT`.
--   [ ] Return `X-Cache: MISS`.
--   [ ] Invalidate stats cache after writes.
--   [ ] Implement distributed IP rate limiting.
--   [ ] Choose fixed-window or token-bucket algorithm.
--   [ ] Key rate limits by client IP.
--   [ ] Return `429` when exceeded.
--   [ ] Return `Retry-After`.
--   [ ] Enable Redis AOF.
--   [ ] Store Redis data on named volume.
--   [ ] Document the AOF volume decision.
+-   [ ] Set up Redis 7. (local dev sandbox runs 8; version is pinned only in the not-yet-built Compose/K8s artifacts)
+-   [x] Implement read-through stats cache.
+-   [x] Set stats TTL to 30 seconds.
+-   [x] Return `X-Cache: HIT`.
+-   [x] Return `X-Cache: MISS`.
+-   [x] Invalidate stats cache after writes.
+-   [x] Implement distributed IP rate limiting.
+-   [x] Use fixed-window algorithm, 10 req/60s per IP (architecture decision — not token-bucket).
+-   [x] Use atomic Lua `INCR`+`EXPIRE` (never plain `INCR` then a separate `EXPIRE`).
+-   [x] Key rate limits by client IP.
+-   [x] Return `429` when exceeded.
+-   [x] Return `Retry-After`.
+-   [x] Fail closed (`503`) on Redis outage for the rate limiter. (unit-tested, `test_redis_fail_modes.py`)
+-   [x] Fail open (degrade to direct query/provider call) on Redis outage for stats cache and triage cache. (unit-tested)
+-   [ ] Enable Redis AOF. (infra config — belongs to the not-yet-built Compose/K8s Redis service)
+-   [ ] Store Redis data on named volume. (infra — same as above)
+-   [x] Document the AOF volume decision. (`docs/ENGINEERING-NOTES.md`)
 
 ## 6. AI Triage
 
--   [ ] Create `TriageResult` Pydantic model.
--   [ ] Add category field.
--   [ ] Add priority field.
--   [ ] Add summary field.
--   [ ] Enforce summary max 140 characters.
--   [ ] Add confidence field.
--   [ ] Enforce confidence 0--1.
--   [ ] Define `TriageProvider` interface.
--   [ ] Add provider name.
--   [ ] Implement `LLMTriage`.
--   [ ] Implement `OllamaTriage`.
--   [ ] Implement `RuleBasedTriage`.
--   [ ] Implement `SimulatedTriage`.
--   [ ] Select provider using `TRIAGE_PROVIDER`.
--   [ ] Configure hosted provider.
--   [ ] Use a small instruct model.
--   [ ] Document the selected provider.
--   [ ] Document live provider limits.
--   [ ] Decide how complaint PII is handled.
--   [ ] Record PII decision in an ADR.
+-   [x] Create `TriageResult` Pydantic model.
+-   [x] Add category field.
+-   [x] Add priority field.
+-   [x] Add summary field.
+-   [x] Enforce summary max 140 characters.
+-   [x] Add confidence field.
+-   [x] Enforce confidence 0--1.
+-   [x] Define `TriageProvider` interface.
+-   [x] Add provider name.
+-   [x] Implement `LLMTriage`.
+-   [x] Implement `RuleBasedTriage`.
+-   [x] Implement `SimulatedTriage`.
+-   [x] Select provider using `TRIAGE_PROVIDER`.
+-   [x] Configure hosted provider. (Groq)
+-   [x] Use a small instruct model. (`openai/gpt-oss-20b`)
+-   [x] Document the selected provider. (ADR 0001, `ai.md`)
+-   [ ] Document live provider limits. (no Groq free-tier RPM/TPM limits recorded anywhere yet)
+-   [x] Document PII handling: raw complaint text is sent to Groq unredacted (architecture decision, not open).
+-   [x] Record PII decision in an ADR. (ADR 0004)
 
 ## 7. AI Reliability
 
--   [ ] Request structured JSON from the LLM.
--   [ ] Validate output with Pydantic.
--   [ ] Reject malformed output safely.
--   [ ] Reject invalid enum values.
--   [ ] Enforce 10-second timeout.
--   [ ] Retry once on timeout.
--   [ ] Retry once on `429`.
--   [ ] Retry once on `5xx`.
--   [ ] Add jitter to retry.
--   [ ] Do not retry `400`.
--   [ ] Fall back to rule-based triage.
--   [ ] Record `triaged_by = rules:fallback`.
--   [ ] Add content-hash triage cache.
--   [ ] Set triage cache TTL to 24 hours.
--   [ ] Measure triage cache hit rate.
--   [ ] Report the measured hit rate.
--   [ ] Never log API keys.
--   [ ] Load API keys from environment variables.
+-   [x] Request structured JSON from the LLM.
+-   [x] Validate output with Pydantic.
+-   [x] Reject malformed output safely.
+-   [x] Reject invalid enum values.
+-   [x] Enforce 10-second timeout.
+-   [x] Retry once on timeout.
+-   [x] Retry once on `429`.
+-   [x] Retry once on `5xx`.
+-   [x] Add jitter to retry.
+-   [x] Do not retry `400`.
+-   [x] Fall back to rule-based triage.
+-   [x] Record `triaged_by = rules:fallback`.
+-   [x] Add content-hash triage cache.
+-   [x] Set triage cache TTL to 24 hours.
+-   [x] Measure triage cache hit rate. (Prometheus counters, functionally verified)
+-   [ ] Report the measured hit rate. (no observed number recorded — needs real/load traffic)
+-   [x] Never log API keys.
+-   [x] Load API keys from environment variables.
 -   [ ] Store Kubernetes API keys in Secrets.
 -   [ ] Store CI credentials in GitHub Secrets.
--   [ ] Treat complaint text as untrusted data.
--   [ ] Add prompt-injection guardrail.
--   [ ] Add prompt-injection test.
--   [ ] Configure CI to use `SimulatedTriage`.
--   [ ] Add provider failure injection.
--   [ ] Test fallback using a failing provider.
--   [ ] Test malformed output handling.
+-   [x] Treat complaint text as untrusted data.
+-   [x] Add prompt-injection guardrail.
+-   [x] Add prompt-injection test.
+-   [ ] Configure CI to use `SimulatedTriage`. (default is already `simulated`; no CI workflow exists yet to consume it)
+-   [x] Add provider failure injection.
+-   [x] Test fallback using a failing provider.
+-   [x] Test malformed output handling.
 
 ## 8. Frontend
 
--   [ ] Set up React 18.
--   [ ] Set up Vite.
--   [ ] Set up TypeScript.
--   [ ] Create submission view.
--   [ ] Add complaint text input.
--   [ ] Add location input.
--   [ ] Add optional contact input.
--   [ ] Add client-side validation.
--   [ ] Mirror server validation rules.
--   [ ] Add honest loading state.
--   [ ] Display returned category.
--   [ ] Display returned priority.
--   [ ] Display AI summary.
--   [ ] Display triage provider.
--   [ ] Create dashboard view.
--   [ ] Add paginated complaint list.
--   [ ] Add category filter.
--   [ ] Add priority filter.
--   [ ] Add status filter.
--   [ ] Add status transition controls.
--   [ ] Display server `409` message verbatim.
--   [ ] Create stats view.
--   [ ] Display category aggregates.
--   [ ] Display priority aggregates.
--   [ ] Display cache-hit state.
--   [ ] Read `X-Cache` header.
--   [ ] Add typed API client.
--   [ ] Generate or verify client against OpenAPI.
--   [ ] Add React error boundary.
--   [ ] Keep secrets out of frontend.
--   [ ] Avoid duplicated backend business rules.
+-   [ ] Set up React 18. (`frontend/package.json` pins React 19.2, not 18 — flag against `CLAUDE.md`/architecture stack choice)
+-   [x] Set up Vite.
+-   [x] Set up TypeScript.
+-   [x] Create submission view.
+-   [x] Add complaint text input.
+-   [x] Add location input.
+-   [x] Add optional contact input.
+-   [x] Add client-side validation.
+-   [x] Mirror server validation rules.
+-   [x] Add honest loading state.
+-   [x] Display returned category.
+-   [x] Display returned priority.
+-   [x] Display AI summary.
+-   [x] Display triage provider.
+-   [x] Create dashboard view.
+-   [x] Add paginated complaint list.
+-   [x] Add category filter.
+-   [x] Add priority filter.
+-   [x] Add status filter.
+-   [x] Add status transition controls.
+-   [x] Display server `409` message verbatim.
+-   [x] Create stats view.
+-   [x] Display category aggregates.
+-   [x] Display priority aggregates.
+-   [x] Display cache-hit state.
+-   [x] Read `X-Cache` header.
+-   [x] Add typed API client.
+-   [ ] Generate or verify client against OpenAPI. (hand-maintained mirror of the backend schemas, no generation/diff step)
+-   [x] Add React error boundary.
+-   [x] Keep secrets out of frontend.
+-   [x] Avoid duplicated backend business rules.
 
 ## 9. Frontend Runtime Configuration
 
--   [ ] Choose runtime `/config.js` or nginx `/api` proxy.
--   [ ] Prevent API URL from being baked into the Vite build.
--   [ ] Make one frontend image usable across environments.
--   [ ] Document the choice in an ADR.
--   [ ] Verify runtime configuration in dev.
+-   [x] Use nginx `/api` proxy for runtime configuration (architecture decision — not `/config.js`; dev-time Vite proxy implements the same contract, production nginx config is Milestone 6).
+-   [x] Prevent API URL from being baked into the Vite build.
+-   [ ] Make one frontend image usable across environments. (no frontend Docker image yet)
+-   [x] Document the choice in an ADR. (ADR 0002)
+-   [x] Verify runtime configuration in dev.
 -   [ ] Verify runtime configuration in production.
 
 ## 10. Frontend Testing
 
--   [ ] Set up Vitest.
--   [ ] Write at least 5 meaningful component tests.
--   [ ] Test submission validation.
--   [ ] Test loading state.
--   [ ] Test complaint rendering.
--   [ ] Test dashboard filtering/pagination.
--   [ ] Test `409` error display.
--   [ ] Test stats/cache indicator.
+-   [x] Set up Vitest.
+-   [x] Write at least 5 meaningful component tests. (8)
+-   [x] Test submission validation.
+-   [x] Test loading state.
+-   [x] Test complaint rendering.
+-   [x] Test dashboard filtering/pagination.
+-   [x] Test `409` error display.
+-   [x] Test stats/cache indicator.
 -   [ ] Run frontend tests in CI.
 
 ## 11. Docker Images
@@ -288,7 +290,7 @@
 -   [ ] Configure backend service.
 -   [ ] Configure PostgreSQL service.
 -   [ ] Configure Redis service.
--   [ ] Configure Ollama service.
+-   [ ] Create a dedicated `migrate` Compose service for Alembic migrations (never run from backend startup).
 -   [ ] Use `edge` network.
 -   [ ] Use `internal` network.
 -   [ ] Set `internal: true`.
@@ -300,15 +302,14 @@
 -   [ ] Resolve hosted-LLM outbound-network requirements.
 -   [ ] Create `pgdata` volume.
 -   [ ] Create `redisdata` volume.
--   [ ] Create `ollama_models` volume.
 -   [ ] Justify all volumes.
 -   [ ] Use dev bind mounts where appropriate.
 -   [ ] Exclude dev bind mounts from production.
 -   [ ] Add healthchecks to every service.
 -   [ ] Use `depends_on: service_healthy`.
 -   [ ] Load credentials from `.env`.
--   [ ] Commit `.env.example`.
--   [ ] Keep `.env` ignored.
+-   [x] Commit `.env.example`.
+-   [x] Keep `.env` ignored.
 -   [ ] Pin image tags.
 -   [ ] Use `restart: unless-stopped`.
 -   [ ] Set resource limits.
@@ -319,7 +320,7 @@
 
 ## 13. Kubernetes Base
 
--   [ ] Choose kind or k3d.
+-   [ ] Use k3d (architecture decision — not kind; built-in Traefik).
 -   [ ] Set up Kustomize.
 -   [ ] Create `k8s/base`.
 -   [ ] Create `k8s/overlays/dev`.
@@ -330,7 +331,9 @@
 -   [ ] Deploy PostgreSQL as StatefulSet.
 -   [ ] Add PostgreSQL PVC via `volumeClaimTemplates`.
 -   [ ] Deploy Redis.
+-   [ ] Use `strategy: Recreate` for the Redis Deployment (RWO PVC would deadlock a RollingUpdate).
 -   [ ] Add Redis PVC.
+-   [ ] Create `migrate` Kubernetes `Job` for migrations (never an `initContainer`); must reach `Complete` before the app receives traffic.
 -   [ ] Create four ClusterIP services.
 -   [ ] Keep database away from NodePort/LoadBalancer.
 -   [ ] Create Ingress.
@@ -473,14 +476,14 @@
 
 ## 22. Collaboration Requirements
 
--   [ ] Use `dev` plus feature branches.
+-   [ ] Use `dev` plus feature branches. (`dev` exists and diverges from `main`; no feature branches used — work committed straight to `dev`)
 -   [ ] Avoid direct commits to `main`.
--   [ ] Merge at least 5 PRs.
+-   [ ] Merge at least 5 PRs. (0 PRs so far — all 4 commits are direct pushes, no merge commits)
 -   [ ] Link each PR to an Issue.
 -   [ ] Add substantive partner review comments.
--   [ ] Make at least 35 commits per required assignment threshold.
--   [ ] Use conventional commit prefixes.
--   [ ] Keep both partners above required contribution threshold.
+-   [ ] Make at least 35 commits per required assignment threshold. (4 commits so far)
+-   [x] Use conventional commit prefixes. (`feat:`, `docs:`, `fix:` observed in `git log`)
+-   [ ] Keep both partners above required contribution threshold. (only one contributor, "asad", in `git shortlog` so far)
 -   [ ] Create one deliberate merge conflict.
 -   [ ] Resolve the conflict.
 -   [ ] Preserve conflict evidence.
@@ -488,29 +491,29 @@
 
 ## 23. Documentation
 
--   [ ] Write problem statement in README.
+-   [x] Write problem statement in README.
 -   [ ] Add badges.
--   [ ] Add Mermaid architecture diagram.
--   [ ] Add one-command quickstart.
+-   [ ] Add Mermaid architecture diagram. (only in `docs/architecture.md`, not README)
+-   [ ] Add one-command quickstart. (current quickstart is multi-step `uv`/manual DB setup — one-command needs Compose)
 -   [ ] Add API table.
 -   [ ] Add screenshots.
--   [ ] Create provider-interface ADR.
--   [ ] Create frontend-runtime-config ADR.
--   [ ] Create deploy-by-SHA ADR.
--   [ ] Create PII/data-governance ADR.
--   [ ] Create `docs/RUNBOOK.md`.
+-   [x] Create provider-interface ADR. (0001)
+-   [x] Create frontend-runtime-config ADR. (0002)
+-   [x] Create deploy-by-SHA ADR. (0003)
+-   [x] Create PII/data-governance ADR. (0004)
+-   [ ] Create `docs/RUNBOOK.md`. (does not exist)
 -   [ ] Document deployment.
 -   [ ] Document rollback.
 -   [ ] Document log inspection.
 -   [ ] Document triage failure response.
--   [ ] Create `docs/ENGINEERING-NOTES.md`.
--   [ ] Answer all 8 engineering questions.
+-   [x] Create `docs/ENGINEERING-NOTES.md`.
+-   [ ] Answer all 8 engineering questions. (notes are organized per-milestone; several questions need CI/CD/K8s/HPA evidence that doesn't exist yet)
 -   [ ] Reference exact files and lines.
--   [ ] Create `docs/AI-USAGE.md`.
+-   [ ] Create `docs/AI-USAGE.md`. (does not exist)
 -   [ ] Document AI tools used.
 -   [ ] Document AI-generated contributions.
 -   [ ] Document your changes and reasoning.
--   [ ] Create `docs/TRIAGE.md`.
+-   [x] Create `docs/TRIAGE.md`.
 
 ## 24. Evidence
 
@@ -545,8 +548,8 @@
 
 ## 26. Engineering Notes
 
--   [ ] Explain laptop vs CI differences.
--   [ ] Identify lines freezing those differences.
+-   [ ] Explain laptop vs CI differences. (Postgres 17-vs-16 dev/prod gap is noted; full laptop/CI framing not written)
+-   [ ] Identify lines freezing those differences. (target line named but doesn't exist yet — Milestone 6 artifact)
 -   [ ] Identify CI/CD maturity level.
 -   [ ] Justify the maturity level.
 -   [ ] Name the next maturity level.
@@ -560,15 +563,15 @@
 -   [ ] Explain how to reduce HPA lag.
 -   [ ] Explain VPA Off mode.
 -   [ ] Explain HPA/VPA conflict.
--   [ ] Explain `internal: true` implications.
--   [ ] Explain hosted-LLM networking solution.
+-   [ ] Explain `internal: true` implications. (recorded as a decision in `docs/ENGINEERING-NOTES.md`, not yet built)
+-   [ ] Explain hosted-LLM networking solution. (same — decided, not built)
 -   [ ] Document the biggest failure encountered.
 -   [ ] Document initial incorrect assumption.
 -   [ ] Document the command/log that revealed the cause.
 
 ## 27. Pre-Submission Safety Checks
 
--   [ ] Run `python scripts/check_submission.py`.
+-   [ ] Run `python scripts/check_submission.py`. (script does not exist yet)
 -   [ ] Remove all secrets from Git history.
 -   [ ] Rotate any exposed credentials.
 -   [ ] Remove API keys from Kubernetes manifests.
@@ -580,7 +583,7 @@
 -   [ ] Verify deployment never uses `latest`.
 -   [ ] Verify PostgreSQL uses StatefulSet + PVC.
 -   [ ] Verify README works from clean clone.
--   [ ] Verify no direct commits to `main`.
+-   [ ] Verify no direct commits to `main`. (currently false — the initial commit is direct on `main`)
 
 ## 28. Optional Bonus
 

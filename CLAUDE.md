@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository currently contains **only planning documentation** (`docs/`) for CivicPulse, a CS4032 Software Construction and Design assignment. No `backend/`, `frontend/`, `k8s/`, or CI code exists yet, there is no `README.md`/`LICENSE`, and the directory is not yet a git repository. When asked to start implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec written before any code, not background reading.
+Git repo (`main`/`dev`, remote `Demidoga/scd_a1`). **Milestones 1–5 are implemented**: `backend/` has the full four-layer backend (routes/services/repositories/providers), PostgreSQL schema via Alembic, the 3-provider AI triage pipeline, Redis caching/rate-limiting, and 112 passing tests at 94.5% coverage; `frontend/` has the React 18 + Vite + TypeScript + Tailwind app (submit/dashboard/stats views, typed API client, runtime-configured via same-origin `/api`, 8 Vitest component tests). `k8s/` and CI don't exist yet — that's Milestones 6–9. See `docs/progress.md` for the current, maintained snapshot of what's done/next; don't rely on this paragraph's specifics staying current, only `docs/progress.md`. When continuing implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec, not background reading.
 
 ## What CivicPulse is
 
@@ -90,19 +90,22 @@ civicpulse/
 
 Full annotated version: `docs/architecture/repository-layout.md`.
 
-## Commands (once the codebase is scaffolded)
+## Commands
 
-No code exists yet, so nothing below is runnable today — these are the commands the architecture docs specify the project *will* use, listed here so they don't need re-deriving from CI/CD docs each time:
+Backend and frontend commands below are runnable today (Milestones 1–5 done; backend via `uv`, frontend via `npm`; see `README.md` for full local setup including the one-time Postgres role/DB creation). Docker/K8s commands remain aspirational until Milestones 6–9 land.
 
-- Backend lint/type: `ruff check .`, `mypy .` (run from `backend/`)
-- Backend tests: `pytest` with `TRIAGE_PROVIDER=simulated`; coverage gate is ≥65% on `app/`
-- Frontend lint/type: `eslint .`, `tsc --noEmit` (run from `frontend/`)
-- Frontend tests: `vitest`
-- Migrations: `alembic upgrade head` (run only via the `migrate` Compose service / k8s `Job`, never manually against the app process)
-- Local stack: `docker compose up` (dev), `docker compose -f compose.prod.yaml up` (prod-shaped)
-- K8s manifest validation: `kustomize build k8s/overlays/prod | kubeconform`
-- Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w`
-- Pre-submission check: `python scripts/check_submission.py`
+- Backend lint/type: `uv run ruff check .`, `uv run mypy app` (run from `backend/`)
+- Backend tests: `uv run pytest tests/unit -q` (no DB needed) or `uv run pytest tests/ --cov=app --cov-report=term-missing -q` (full suite, needs local `civicpulse_test` Postgres + Redis db 15); CI/dev default `TRIAGE_PROVIDER=simulated`; coverage gate is ≥65% on `app/` (currently ~94.5%)
+- Migrations: `uv run alembic upgrade head` (local dev only for now; the dedicated `migrate` Compose service / k8s `Job` pattern is Milestone 6/7 work)
+- Seed: `uv run python -m app.seed` (idempotent, ≥30 complaints)
+- Frontend dev server: `npm run dev` (run from `frontend/`; proxies `/api` to `http://localhost:8000`, requires the backend running)
+- Frontend lint/type: `npm run lint` (oxlint), `npx tsc -b` (run from `frontend/`)
+- Frontend build: `npm run build` — `tsc -b && vite build` (run from `frontend/`)
+- Frontend tests: `npm run test` (Vitest + Testing Library, run from `frontend/`)
+- Local stack: `docker compose up` (dev), `docker compose -f compose.prod.yaml up` (prod-shaped) — not yet written
+- K8s manifest validation: `kustomize build k8s/overlays/prod | kubeconform` — not yet written
+- Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w` — not yet written
+- Pre-submission check: `python scripts/check_submission.py` — not yet written
 
 ## Build order
 
@@ -124,7 +127,7 @@ Build the application using a **clean, and scalable file/folder architecture**.
 
 Prioritize **maintainability, discoverability, separation of concerns, and scalability** over minimizing the number of files.
 
-### Architectural Flexibility
+## Architectural Flexibility
 
 `ARCHITECTURE.md` and `Milestones.md` are a guideline, not a strict whitelist of files or folders.
 
@@ -132,3 +135,11 @@ Prioritize **maintainability, discoverability, separation of concerns, and scala
 * Improvise and introduce new structure when it improves clarity, separation of concerns, or maintainability.
 * Do not force code into documented locations if a better structure makes more sense.
 * Update `ARCHITECTURE.md` when making significant architectural changes.
+
+## Response Guidelines
+
+- Explain concepts simply and assume the developer is a junior. Avoid unexplained framework-specific or advanced terminology.
+- Name tools, services, extensions, and infrastructure explicitly. State where each comes from and what it does.
+- Clearly identify all manual steps, including configuration, database changes, dashboard settings, environment variables, CLI commands, and deployment steps.
+- End every response with a `Files Edited` section listing every file modified.
+
