@@ -11,8 +11,8 @@ distributed rate limiting.
 
 ## Current status
 
-**Milestones 1–4 (backend foundation, database, AI triage + Redis, complete
-API + tests) are implemented.** Frontend (Milestone 5), Docker/Compose
+**Milestones 1–5 (backend foundation, database, AI triage + Redis, complete
+API + tests, and the React frontend) are implemented.** Docker/Compose
 (Milestone 6), Kubernetes (Milestone 7–8), and CI/CD (Milestone 9) are not
 yet built — see `docs/Milestones.md` for the full build order and
 `docs/architecture.md` for the complete system design (including the parts
@@ -72,12 +72,35 @@ AI triage implementation — CI and local dev default to `simulated`
 (deterministic, no network, no API key needed). Setting it to `llm` requires
 `LLM_API_KEY` (a [Groq](https://console.groq.com) API key).
 
+## Frontend quickstart
+
+Requires the backend above running on `:8000`.
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173, proxies /api -> http://localhost:8000
+```
+
+```bash
+cd frontend
+npm run lint          # oxlint
+npm run build         # tsc -b && vite build
+npm run test          # vitest run
+```
+
+See `frontend/README.md` and `docs/architecture/frontend.md` for the
+runtime-configuration approach (same-origin `/api`, no backend URL baked
+into the build) and the typed API client.
+
 ## Project layout
 
 ```text
 backend/app/{routes,services,repositories,providers/{redis,triage},domain,core}/
 backend/alembic/versions/       — schema migrations
 backend/tests/{unit,integration}/
+frontend/src/{api,components,pages}/
+frontend/tests/                 — Vitest + Testing Library component tests
 docs/architecture/              — the binding technical spec, one file per domain
 docs/adr/                       — architecture decision records
 docs/Milestones*                — the working implementation checklist

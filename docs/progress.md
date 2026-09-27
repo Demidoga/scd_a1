@@ -43,6 +43,26 @@ unit, 49 integration — see `backend/tests/`), 94.5% coverage on `app/`
 (`tests/integration/test_fallback_e2e.py`) passes end-to-end through the
 real HTTP API via `app.dependency_overrides`.
 
+**Milestone 5 — Frontend.** React 18 + Vite + TypeScript + Tailwind CSS in
+`frontend/`. Three views: `SubmitPage` (client validation mirroring backend
+limits, honest loading state, renders category/priority/AI summary/provider
+on success, field-level 400 errors), `DashboardPage` (category/priority/status
+filters, server-driven pagination, status-transition buttons that surface the
+backend's 409 message verbatim — no client copy of the transition table, see
+`docs/architecture/backend.md` §4), `StatsPage` (aggregates + `X-Cache`
+HIT/MISS display). Typed API client in `frontend/src/api/` mirrors
+`backend/app/domain/schemas.py`/`enums.py`. Runtime configuration per ADR
+0002: all calls go to same-origin `/api/...`, no backend URL baked into the
+build — the Vite dev server proxies `/api` to `localhost:8000` as the
+dev-time equivalent of the nginx proxy Milestone 6 will add. `ErrorBoundary`
+wraps the routed pages. 8 Vitest + Testing Library component tests across
+the three pages (validation, loading state, triage rendering, filters,
+pagination, 409 verbatim rendering, stats cache state — exceeds the 5
+required). Verified end-to-end against the real backend (Postgres + Redis +
+`SimulatedTriage`) via the dev proxy: submit → triage → persist → list →
+409 on an illegal transition → legal transition succeeds. Docker/nginx
+container build is explicitly out of scope here — that's Milestone 6.
+
 ## Known, deliberate gaps (not oversights)
 
 - **No Ollama.** Instructor-approved scope reduction — see ADR 0001 and
@@ -66,15 +86,13 @@ real HTTP API via `app.dependency_overrides`.
 
 ## Next
 
-**Milestone 5 — Frontend.** Not started. Needs: complaint submission page,
-operations dashboard (filter/paginate/status-update), stats view, typed API
-client generated/checked against the backend's OpenAPI doc
-(`http://localhost:8000/openapi.json` once the backend is running), runtime
-config per ADR 0002 (nginx `/api` proxy — no absolute backend URL baked into
-the Vite build).
+**Milestone 6 — Docker/Compose.** Not started. Needs: `frontend/Dockerfile`
+(multi-stage `node:22-alpine` build → `nginx:1.27-alpine`, ~60MB target,
+`frontend/nginx.conf` implementing the `/api` proxy the frontend already
+assumes), `backend/Dockerfile`, `compose.yaml`/`compose.prod.yaml`,
+`edge`/`internal` networks, the dedicated `migrate` Compose service.
 
-After that, in order: Milestone 6 (Docker/Compose — five-container topology,
-`edge`/`internal` networks), 7–8 (Kubernetes baseline, then HPA/VPA + load
+After that, in order: 7–8 (Kubernetes baseline, then HPA/VPA + load
 testing), 9 (CI/CD), 10 (docs/evidence/hardening). See
 `docs/architecture/roadmap.md` and `docs/Milestones.md` for the full
 dependency chain — don't jump ahead to Kubernetes work while anything in the
