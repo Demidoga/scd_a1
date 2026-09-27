@@ -60,7 +60,7 @@ ComplaintRepository.create(..., category, priority, ai_summary, triaged_by, tria
 
 `TRIAGE_PROVIDER` env var → `llm` | `rules` | `simulated`. `llm` additionally
 requires `LLM_API_KEY` (Groq) and `LLM_MODEL` (default
-`llama-3.1-8b-instant`). The active provider is constructed once as a
+`openai/gpt-oss-20b`). The active provider is constructed once as a
 process-wide singleton (`app/core/wiring.py::get_triage_provider`, `lru_cache`)
 — not re-selected per request.
 

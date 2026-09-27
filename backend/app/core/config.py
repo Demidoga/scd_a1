@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Triage provider selection
     triage_provider: Literal["llm", "rules", "simulated"] = "simulated"
     llm_api_key: str = ""
-    llm_model: str = "llama-3.1-8b-instant"
+    llm_model: str = "openai/gpt-oss-20b"
 
     # Database
     database_url: str = "postgresql+psycopg://civicpulse:civicpulse@localhost:5432/civicpulse"
