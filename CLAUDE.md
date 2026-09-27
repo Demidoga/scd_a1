@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository currently contains **only planning documentation** (`docs/`) for CivicPulse, a CS4032 Software Construction and Design assignment. No `backend/`, `frontend/`, `k8s/`, or CI code exists yet, there is no `README.md`/`LICENSE`, and the directory is not yet a git repository. When asked to start implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec written before any code, not background reading.
+Git repo (`main`/`dev`, remote `Demidoga/scd_a1`). **Milestones 1–4 are implemented**: `backend/` has the full four-layer backend (routes/services/repositories/providers), PostgreSQL schema via Alembic, the 3-provider AI triage pipeline, Redis caching/rate-limiting, and 112 passing tests at 94.5% coverage. `frontend/`, `k8s/`, and CI don't exist yet — that's Milestones 5–9. See `docs/progress.md` for the current, maintained snapshot of what's done/next; don't rely on this paragraph's specifics staying current, only `docs/progress.md`. When continuing implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec, not background reading.
 
 ## What CivicPulse is
 
@@ -90,19 +90,20 @@ civicpulse/
 
 Full annotated version: `docs/architecture/repository-layout.md`.
 
-## Commands (once the codebase is scaffolded)
+## Commands
 
-No code exists yet, so nothing below is runnable today — these are the commands the architecture docs specify the project *will* use, listed here so they don't need re-deriving from CI/CD docs each time:
+Backend commands below are runnable today (Milestones 1–4 done, `backend/` via `uv`; see `README.md` for full local setup including the one-time Postgres role/DB creation). Frontend/Docker/K8s commands remain aspirational until Milestones 5–9 land.
 
-- Backend lint/type: `ruff check .`, `mypy .` (run from `backend/`)
-- Backend tests: `pytest` with `TRIAGE_PROVIDER=simulated`; coverage gate is ≥65% on `app/`
-- Frontend lint/type: `eslint .`, `tsc --noEmit` (run from `frontend/`)
-- Frontend tests: `vitest`
-- Migrations: `alembic upgrade head` (run only via the `migrate` Compose service / k8s `Job`, never manually against the app process)
-- Local stack: `docker compose up` (dev), `docker compose -f compose.prod.yaml up` (prod-shaped)
-- K8s manifest validation: `kustomize build k8s/overlays/prod | kubeconform`
-- Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w`
-- Pre-submission check: `python scripts/check_submission.py`
+- Backend lint/type: `uv run ruff check .`, `uv run mypy app` (run from `backend/`)
+- Backend tests: `uv run pytest tests/unit -q` (no DB needed) or `uv run pytest tests/ --cov=app --cov-report=term-missing -q` (full suite, needs local `civicpulse_test` Postgres + Redis db 15); CI/dev default `TRIAGE_PROVIDER=simulated`; coverage gate is ≥65% on `app/` (currently ~94.5%)
+- Migrations: `uv run alembic upgrade head` (local dev only for now; the dedicated `migrate` Compose service / k8s `Job` pattern is Milestone 6/7 work)
+- Seed: `uv run python -m app.seed` (idempotent, ≥30 complaints)
+- Frontend lint/type: `eslint .`, `tsc --noEmit` (run from `frontend/`) — not yet scaffolded
+- Frontend tests: `vitest` — not yet scaffolded
+- Local stack: `docker compose up` (dev), `docker compose -f compose.prod.yaml up` (prod-shaped) — not yet written
+- K8s manifest validation: `kustomize build k8s/overlays/prod | kubeconform` — not yet written
+- Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w` — not yet written
+- Pre-submission check: `python scripts/check_submission.py` — not yet written
 
 ## Build order
 
