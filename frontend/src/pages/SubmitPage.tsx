@@ -27,6 +27,9 @@ function validate(text: string, location: string): ClientErrors {
   return errors
 }
 
+const inputClass =
+  'mt-1.5 block w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 transition-colors placeholder:text-zinc-500 hover:border-zinc-600 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/15'
+
 export function SubmitPage() {
   const [text, setText] = useState('')
   const [location, setLocation] = useState('')
@@ -76,14 +79,18 @@ export function SubmitPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="text-2xl font-semibold text-slate-900">Report an issue</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Report an issue</h1>
+      <p className="mt-1.5 text-sm text-zinc-400">
         Describe the problem and where it is happening. It will be automatically triaged.
       </p>
 
-      <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="mt-7 space-y-5 rounded-xl border border-zinc-800 bg-zinc-900 p-6 sm:p-7"
+      >
         <div>
-          <label htmlFor="text" className="block text-sm font-medium text-slate-700">
+          <label htmlFor="text" className="block text-sm font-medium text-zinc-300">
             Complaint text
           </label>
           <textarea
@@ -91,17 +98,21 @@ export function SubmitPage() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={5}
-            className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+            className={`${inputClass} resize-none`}
             placeholder="e.g. There is a large pothole outside 12 Main Street causing traffic to swerve."
           />
-          <p className="mt-1 text-xs text-slate-400">{text.length}/{TEXT_MAX} characters</p>
-          {(clientErrors.text || fieldMessage('text')) && (
-            <p className="mt-1 text-sm text-red-600">{clientErrors.text ?? fieldMessage('text')}</p>
-          )}
+          <div className="mt-1.5 flex items-start justify-between gap-4">
+            {(clientErrors.text || fieldMessage('text')) && (
+              <p className="text-sm text-rose-400">{clientErrors.text ?? fieldMessage('text')}</p>
+            )}
+            <p className="ml-auto shrink-0 text-xs tabular-nums text-zinc-500">
+              {text.length}/{TEXT_MAX}
+            </p>
+          </div>
         </div>
 
         <div>
-          <label htmlFor="location" className="block text-sm font-medium text-slate-700">
+          <label htmlFor="location" className="block text-sm font-medium text-zinc-300">
             Location
           </label>
           <input
@@ -109,26 +120,26 @@ export function SubmitPage() {
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+            className={inputClass}
             placeholder="e.g. 12 Main Street"
           />
           {(clientErrors.location || fieldMessage('location')) && (
-            <p className="mt-1 text-sm text-red-600">
+            <p className="mt-1.5 text-sm text-rose-400">
               {clientErrors.location ?? fieldMessage('location')}
             </p>
           )}
         </div>
 
         <div>
-          <label htmlFor="contact" className="block text-sm font-medium text-slate-700">
-            Contact (optional)
+          <label htmlFor="contact" className="block text-sm font-medium text-zinc-300">
+            Contact <span className="font-normal text-zinc-500">(optional)</span>
           </label>
           <input
             id="contact"
             type="text"
             value={reporterContact}
             onChange={(e) => setReporterContact(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+            className={inputClass}
             placeholder="Email or phone number"
           />
         </div>
@@ -138,7 +149,7 @@ export function SubmitPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 hover:bg-slate-700"
+          className="w-full rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? 'Submitting…' : 'Submit complaint'}
         </button>
@@ -146,33 +157,47 @@ export function SubmitPage() {
       </form>
 
       {result && (
-        <div className="mt-8 rounded-lg border border-green-200 bg-green-50 p-4">
-          <h2 className="text-sm font-semibold text-green-900">Complaint submitted</h2>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/6 p-5">
+          <div className="flex items-center gap-2">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4.5 w-4.5 text-emerald-400"
+            >
+              <path
+                fillRule="evenodd"
+                d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <h2 className="text-sm font-semibold text-emerald-100">Complaint submitted</h2>
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3.5 text-sm">
             <div>
-              <dt className="text-green-700">Category</dt>
-              <dd className="font-medium capitalize text-green-900">{result.category}</dd>
+              <dt className="text-xs font-medium text-emerald-400/80">Category</dt>
+              <dd className="mt-0.5 font-medium capitalize text-emerald-50">{result.category}</dd>
             </div>
             <div>
-              <dt className="text-green-700">Priority</dt>
-              <dd>
+              <dt className="text-xs font-medium text-emerald-400/80">Priority</dt>
+              <dd className="mt-1">
                 <PriorityBadge priority={result.priority} />
               </dd>
             </div>
             <div>
-              <dt className="text-green-700">Status</dt>
-              <dd>
+              <dt className="text-xs font-medium text-emerald-400/80">Status</dt>
+              <dd className="mt-1">
                 <StatusBadge status={result.status} />
               </dd>
             </div>
             <div>
-              <dt className="text-green-700">Triaged by</dt>
-              <dd className="font-medium text-green-900">{result.triaged_by}</dd>
+              <dt className="text-xs font-medium text-emerald-400/80">Triaged by</dt>
+              <dd className="mt-0.5 font-medium text-emerald-50">{result.triaged_by}</dd>
             </div>
             {result.ai_summary && (
-              <div className="col-span-2">
-                <dt className="text-green-700">AI summary</dt>
-                <dd className="text-green-900">{result.ai_summary}</dd>
+              <div className="col-span-2 border-t border-emerald-500/20 pt-3.5">
+                <dt className="text-xs font-medium text-emerald-400/80">AI summary</dt>
+                <dd className="mt-0.5 text-emerald-50">{result.ai_summary}</dd>
               </div>
             )}
           </dl>

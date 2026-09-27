@@ -65,9 +65,19 @@ export function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Operations dashboard</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
+            Operations dashboard
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-400">
+            <span className="font-medium text-zinc-200 tabular-nums">{total}</span> complaint
+            {total === 1 ? '' : 's'} matching current filters
+          </p>
+        </div>
+      </div>
 
-      <div className="mt-4">
+      <div className="mt-5">
         <FilterBar filters={filters} onChange={handleFiltersChange} />
       </div>
 
@@ -86,47 +96,64 @@ export function DashboardPage() {
       {loading ? (
         <LoadingSpinner label="Loading complaints…" />
       ) : items.length === 0 ? (
-        <p className="mt-8 text-sm text-slate-500">No complaints match these filters.</p>
+        <div className="mt-4 flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-zinc-700 py-16 text-center">
+          <p className="text-sm font-medium text-zinc-300">No complaints match these filters</p>
+          <p className="text-sm text-zinc-500">Try adjusting or clearing the filters above.</p>
+        </div>
       ) : (
-        <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium text-slate-500">Complaint</th>
-                <th className="px-3 py-2 text-left font-medium text-slate-500">Location</th>
-                <th className="px-3 py-2 text-left font-medium text-slate-500">Category</th>
-                <th className="px-3 py-2 text-left font-medium text-slate-500">Priority</th>
-                <th className="px-3 py-2 text-left font-medium text-slate-500">Status</th>
-                <th className="px-3 py-2 text-left font-medium text-slate-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {items.map((c) => (
-                <tr key={c.id}>
-                  <td className="max-w-xs px-3 py-2 text-slate-700">
-                    <p className="truncate" title={c.text}>
-                      {c.text}
-                    </p>
-                  </td>
-                  <td className="px-3 py-2 text-slate-500">{c.location}</td>
-                  <td className="px-3 py-2 capitalize text-slate-700">{c.category}</td>
-                  <td className="px-3 py-2">
-                    <PriorityBadge priority={c.priority} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <StatusTransitionActions
-                      status={c.status}
-                      disabled={pendingId === c.id}
-                      onTransition={(target) => handleTransition(c.id, target)}
-                    />
-                  </td>
+        <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-zinc-800 text-sm">
+              <thead className="bg-zinc-800/40">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Complaint
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Location
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Category
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Priority
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Status
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {items.map((c) => (
+                  <tr key={c.id} className="transition-colors hover:bg-zinc-800/40">
+                    <td className="max-w-xs px-4 py-3 text-zinc-300">
+                      <p className="truncate" title={c.text}>
+                        {c.text}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-500">{c.location}</td>
+                    <td className="px-4 py-3 capitalize text-zinc-300">{c.category}</td>
+                    <td className="px-4 py-3">
+                      <PriorityBadge priority={c.priority} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={c.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusTransitionActions
+                        status={c.status}
+                        disabled={pendingId === c.id}
+                        onTransition={(target) => handleTransition(c.id, target)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

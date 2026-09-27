@@ -10,9 +10,21 @@ import type { Status } from '../api/types'
 const TERMINAL: Status[] = ['resolved', 'rejected']
 
 const ACTIONS: { target: Status; label: string; className: string }[] = [
-  { target: 'in_progress', label: 'Mark in progress', className: 'bg-amber-600 hover:bg-amber-500' },
-  { target: 'resolved', label: 'Resolve', className: 'bg-green-600 hover:bg-green-500' },
-  { target: 'rejected', label: 'Reject', className: 'bg-red-600 hover:bg-red-500' },
+  {
+    target: 'in_progress',
+    label: 'Mark in progress',
+    className: 'bg-amber-500/10 text-amber-300 ring-amber-500/20 hover:bg-amber-500/20',
+  },
+  {
+    target: 'resolved',
+    label: 'Resolve',
+    className: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20 hover:bg-emerald-500/20',
+  },
+  {
+    target: 'rejected',
+    label: 'Reject',
+    className: 'bg-rose-500/10 text-rose-300 ring-rose-500/20 hover:bg-rose-500/20',
+  },
 ]
 
 interface Props {
@@ -23,7 +35,7 @@ interface Props {
 
 export function StatusTransitionActions({ status, disabled, onTransition }: Props) {
   if (TERMINAL.includes(status)) {
-    return <span className="text-xs text-slate-400">No further actions</span>
+    return <span className="text-xs text-zinc-500">No further actions</span>
   }
 
   return (
@@ -34,7 +46,7 @@ export function StatusTransitionActions({ status, disabled, onTransition }: Prop
           type="button"
           disabled={disabled}
           onClick={() => onTransition(action.target)}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 ${action.className}`}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${action.className}`}
         >
           {action.label}
         </button>

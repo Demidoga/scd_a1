@@ -6,17 +6,27 @@ import { ErrorMessage } from '../components/ErrorMessage'
 
 function BreakdownList({ title, data }: { title: string; data: Record<string, number> }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1])
+  const max = entries.length > 0 ? entries[0][1] : 0
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+      <h3 className="text-sm font-semibold text-zinc-200">{title}</h3>
       {entries.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-400">No data yet.</p>
+        <p className="mt-3 text-sm text-zinc-500">No data yet.</p>
       ) : (
-        <ul className="mt-3 space-y-1.5">
+        <ul className="mt-4 space-y-3">
           {entries.map(([key, value]) => (
-            <li key={key} className="flex items-center justify-between text-sm">
-              <span className="capitalize text-slate-600">{key.replace('_', ' ')}</span>
-              <span className="font-medium text-slate-900">{value}</span>
+            <li key={key}>
+              <div className="flex items-center justify-between text-sm">
+                <span className="capitalize text-zinc-400">{key.replace(/_/g, ' ')}</span>
+                <span className="font-medium tabular-nums text-zinc-50">{value}</span>
+              </div>
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-full rounded-full bg-blue-500/80"
+                  style={{ width: max > 0 ? `${(value / max) * 100}%` : '0%' }}
+                />
+              </div>
             </li>
           ))}
         </ul>
@@ -52,11 +62,11 @@ export function StatsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Statistics</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Statistics</h1>
         <button
           type="button"
           onClick={load}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-zinc-700 bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
         >
           Refresh
         </button>
@@ -71,18 +81,20 @@ export function StatsPage() {
 
       {stats && !loading && (
         <>
-          <div className="mt-4 flex items-center gap-3">
-            <p className="text-3xl font-semibold text-slate-900">{stats.total}</p>
-            <p className="text-sm text-slate-500">total complaints</p>
+          <div className="mt-5 flex items-center gap-4 rounded-xl border border-zinc-800 bg-zinc-900 px-5 py-4">
+            <p className="text-3xl font-semibold tracking-tight tabular-nums text-zinc-50">
+              {stats.total}
+            </p>
+            <p className="text-sm text-zinc-400">total complaints</p>
             {cacheStatus && (
               <span
                 data-testid="cache-status"
-                className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
                   cacheStatus === 'HIT'
-                    ? 'bg-green-100 text-green-800'
+                    ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/25'
                     : cacheStatus === 'MISS'
-                      ? 'bg-slate-100 text-slate-600'
-                      : 'bg-slate-100 text-slate-400'
+                      ? 'bg-zinc-800 text-zinc-400 ring-zinc-600/20'
+                      : 'bg-zinc-900 text-zinc-600 ring-zinc-700/30'
                 }`}
               >
                 X-Cache: {cacheStatus}

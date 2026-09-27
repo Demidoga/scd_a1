@@ -12,14 +12,19 @@ interface Props {
   onChange: (filters: Filters) => void
 }
 
+const selectClass =
+  'mt-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-600 focus:border-blue-500 focus:outline-none'
+
 export function FilterBar({ filters, onChange }: Props) {
+  const hasFilters = Boolean(filters.category || filters.priority || filters.status)
+
   return (
-    <div className="flex flex-wrap items-end gap-4">
-      <label className="flex flex-col text-sm text-slate-600">
+    <div className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5">
+      <label className="flex flex-col text-xs font-medium text-zinc-400">
         Category
         <select
           aria-label="Filter by category"
-          className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className={selectClass}
           value={filters.category ?? ''}
           onChange={(e) =>
             onChange({ ...filters, category: (e.target.value || undefined) as Category | undefined })
@@ -34,11 +39,11 @@ export function FilterBar({ filters, onChange }: Props) {
         </select>
       </label>
 
-      <label className="flex flex-col text-sm text-slate-600">
+      <label className="flex flex-col text-xs font-medium text-zinc-400">
         Priority
         <select
           aria-label="Filter by priority"
-          className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className={selectClass}
           value={filters.priority ?? ''}
           onChange={(e) =>
             onChange({ ...filters, priority: (e.target.value || undefined) as Priority | undefined })
@@ -53,11 +58,11 @@ export function FilterBar({ filters, onChange }: Props) {
         </select>
       </label>
 
-      <label className="flex flex-col text-sm text-slate-600">
+      <label className="flex flex-col text-xs font-medium text-zinc-400">
         Status
         <select
           aria-label="Filter by status"
-          className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className={selectClass}
           value={filters.status ?? ''}
           onChange={(e) =>
             onChange({ ...filters, status: (e.target.value || undefined) as Status | undefined })
@@ -72,11 +77,11 @@ export function FilterBar({ filters, onChange }: Props) {
         </select>
       </label>
 
-      {(filters.category || filters.priority || filters.status) && (
+      {hasFilters && (
         <button
           type="button"
           onClick={() => onChange({})}
-          className="text-sm font-medium text-slate-500 hover:text-slate-800"
+          className="text-xs font-medium text-zinc-500 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-zinc-200 hover:decoration-zinc-500"
         >
           Clear filters
         </button>
