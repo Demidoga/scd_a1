@@ -249,74 +249,86 @@
 
 ### Backend
 
--   [ ] Use `python:3.12-slim`.
--   [ ] Use multi-stage build.
--   [ ] Install dependencies in builder stage.
--   [ ] Optimize COPY order.
--   [ ] Create non-root user.
--   [ ] Use exec-form `CMD`.
--   [ ] Add Docker `HEALTHCHECK`.
--   [ ] Pin image versions.
+-   [x] Use `python:3.12-slim`.
+-   [x] Use multi-stage build.
+-   [x] Install dependencies in builder stage.
+-   [x] Optimize COPY order.
+-   [x] Create non-root user.
+-   [x] Use exec-form `CMD`.
+-   [x] Add Docker `HEALTHCHECK`.
+-   [x] Pin image versions.
 -   [ ] Optionally pin base images by digest.
 
 ### Frontend
 
--   [ ] Use `node:22-alpine` build stage.
--   [ ] Use `nginx:1.27-alpine` runtime stage.
--   [ ] Exclude Node from final image.
--   [ ] Exclude `node_modules` from final image.
--   [ ] Exclude source from final runtime image.
--   [ ] Report final image size.
--   [ ] Target frontend image around 60 MB or less.
+-   [x] Use `node:22-alpine` build stage.
+-   [x] Use `nginx:1.27-alpine` runtime stage.
+-   [x] Exclude Node from final image (verified: `which node npm` empty in the running container).
+-   [x] Exclude `node_modules` from final image.
+-   [x] Exclude source from final runtime image.
+-   [x] Report final image size (20.3MB, after the `nginx:1.27-alpine-slim` optimization below — `docs/evidence/milestone-6/image-sizes.txt`).
+-   [x] Target frontend image around 60 MB or less. **Met**: initial
+    measurement was 74.5MB (~24% over, driven by `nginx:1.27-alpine`'s
+    bundled dynamic modules — geoip/image-filter/njs/xslt — that
+    `frontend/nginx.conf` never uses). Swapped the runtime base to the
+    official `nginx:1.27-alpine-slim` tag (no other Dockerfile/nginx.conf
+    change); rebuilt at 20.3MB. Verified nginx still starts, config test
+    passes, `HEALTHCHECK`'s `wget` binary is present and healthy, and the
+    full `docker compose` stack reaches `healthy` on all four services.
+    See `docs/evidence/milestone-6/image-sizes.txt`.
 
 ### Build Context
 
--   [ ] Add backend `.dockerignore`.
--   [ ] Add frontend `.dockerignore`.
--   [ ] Exclude `.git`.
--   [ ] Exclude `node_modules`.
--   [ ] Exclude `.venv`.
--   [ ] Exclude `__pycache__`.
--   [ ] Exclude `.env`.
--   [ ] Exclude test fixtures where appropriate.
--   [ ] Measure build-context size before.
--   [ ] Measure build-context size after.
+-   [x] Add backend `.dockerignore`.
+-   [x] Add frontend `.dockerignore`.
+-   [x] Exclude `.git`.
+-   [x] Exclude `node_modules`.
+-   [x] Exclude `.venv`.
+-   [x] Exclude `__pycache__`.
+-   [x] Exclude `.env`.
+-   [x] Exclude test fixtures where appropriate.
+-   [x] Measure build-context size before (with `.dockerignore` present).
+-   [x] Measure build-context size after (temporarily renamed away —
+    backend 589.3kB → 143.8MB, frontend 187.9kB → 156.1MB; see
+    `docs/evidence/milestone-6/build-context.txt`).
 
 ## 12. Docker Compose
 
--   [ ] Create `compose.yaml`.
--   [ ] Create `compose.prod.yaml`.
--   [ ] Configure frontend service.
--   [ ] Configure backend service.
--   [ ] Configure PostgreSQL service.
--   [ ] Configure Redis service.
--   [ ] Create a dedicated `migrate` Compose service for Alembic migrations (never run from backend startup).
--   [ ] Use `edge` network.
--   [ ] Use `internal` network.
--   [ ] Set `internal: true`.
--   [ ] Put frontend on `edge` only.
--   [ ] Put backend on both networks.
--   [ ] Put database on `internal` only.
--   [ ] Put cache on `internal` only.
--   [ ] Verify frontend cannot reach database.
--   [ ] Resolve hosted-LLM outbound-network requirements.
--   [ ] Create `pgdata` volume.
--   [ ] Create `redisdata` volume.
--   [ ] Justify all volumes.
--   [ ] Use dev bind mounts where appropriate.
--   [ ] Exclude dev bind mounts from production.
--   [ ] Add healthchecks to every service.
--   [ ] Use `depends_on: service_healthy`.
--   [ ] Load credentials from `.env`.
+-   [x] Create `compose.yaml`.
+-   [x] Create `compose.prod.yaml`.
+-   [x] Configure frontend service.
+-   [x] Configure backend service.
+-   [x] Configure PostgreSQL service.
+-   [x] Configure Redis service.
+-   [x] Create a dedicated `migrate` Compose service for Alembic migrations (never run from backend startup).
+-   [x] Use `edge` network.
+-   [x] Use `internal` network.
+-   [x] Set `internal: true`.
+-   [x] Put frontend on `edge` only (confirmed via `docker inspect`).
+-   [x] Put backend on both networks.
+-   [x] Put database on `internal` only (confirmed via `docker inspect`).
+-   [x] Put cache on `internal` only.
+-   [x] Verify frontend cannot reach database (DNS-level isolation confirmed — `docs/evidence/milestone-6/frontend-db-isolation.txt`).
+-   [ ] Resolve hosted-LLM outbound-network requirements. (backend sits on
+    `edge`+`internal`, giving it outbound routing; not re-verified this
+    pass with a live outbound call to the hosted LLM API.)
+-   [x] Create `pgdata` volume.
+-   [x] Create `redisdata` volume.
+-   [x] Justify all volumes (`docs/evidence/milestone-6/volumes-and-scope.txt` — 2 volumes is 100% compliance under the hosted-LLM/no-Ollama architecture).
+-   [x] Use dev bind mounts where appropriate (`backend/app` hot-reload mount in `compose.yaml`).
+-   [x] Exclude dev bind mounts from production (confirmed: `compose.prod.yaml` has no bind mounts).
+-   [x] Add healthchecks to every service (all 4 long-running services reach `healthy`; fixed a real bug in the frontend `HEALTHCHECK` this pass — see `docs/progress.md` M6 addendum).
+-   [x] Use `depends_on: service_healthy`.
+-   [x] Load credentials from `.env`.
 -   [x] Commit `.env.example`.
 -   [x] Keep `.env` ignored.
--   [ ] Pin image tags.
--   [ ] Use `restart: unless-stopped`.
--   [ ] Set resource limits.
--   [ ] Avoid DB/cache ports in production.
--   [ ] Use `image: ${IMAGE_TAG}` in production.
--   [ ] Ensure production Compose has no `build:` keys.
--   [ ] Verify `docker compose down` preserves PostgreSQL data.
+-   [x] Pin image tags (`postgres:16-alpine`, `redis:7-alpine`; prod backend/frontend pinned via required `${IMAGE_TAG}`, never `latest`).
+-   [x] Use `restart: unless-stopped`.
+-   [x] Set resource limits (`deploy.resources.limits` on every service).
+-   [x] Avoid DB/cache ports in production (confirmed: no `ports:` on `postgres`/`redis` in `compose.prod.yaml`).
+-   [x] Use `image: ${IMAGE_TAG}` in production.
+-   [x] Ensure production Compose has no `build:` keys.
+-   [x] Verify `docker compose down` preserves PostgreSQL data (real row survived a full `down`/`up -d` cycle — `docs/evidence/milestone-6/postgres-persistence.txt`).
 
 ## 13. Kubernetes Base
 

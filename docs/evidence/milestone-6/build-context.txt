@@ -1,0 +1,58 @@
+M6 Evidence: Docker build context size — .dockerignore effectiveness
+======================================================================
+Generated: 2026-09-29 (Docker Desktop v29.8.0 / Windows, WSL2 backend)
+
+Method: `DOCKER_BUILDKIT=0 docker build ...` is used deliberately instead of
+BuildKit. BuildKit lazily transfers only the files referenced by COPY
+instructions, so it under-reports the true context size when a Dockerfile
+doesn't `COPY . .` (as with backend/Dockerfile). The legacy builder prints
+the exact "Sending build context to Docker daemon" size for the whole
+filtered context, which is what .dockerignore actually governs.
+
+The `.dockerignore` file was temporarily renamed to `.dockerignore.bak`
+(never deleted) for the "WITHOUT" measurement, then immediately renamed
+back after each build. Both directories were confirmed to have
+`.dockerignore` present again after the test.
+
+----------------------------------------------------------------------
+Requirement: Build context size is minimized via .dockerignore (backend)
+Command: DOCKER_BUILDKIT=0 docker build -f backend/Dockerfile backend --target builder -t civicpulse-backend-legacy:tmp
+Output: Sending build context to Docker daemon  589.3kB
+Result: PASS — with backend/.dockerignore present, context is 589.3kB
+
+Requirement: Build context WITHOUT .dockerignore (backend) — proves the ignore file's effect
+Command: mv backend/.dockerignore backend/.dockerignore.bak
+         DOCKER_BUILDKIT=0 docker build -f backend/Dockerfile backend --target builder -t civicpulse-backend-legacy2:tmp
+         mv backend/.dockerignore.bak backend/.dockerignore
+Output: Sending build context to Docker daemon  143.8MB
+Result: PASS — without .dockerignore, the local backend/.venv (~145M on disk)
+        is swept into the context. 143.8MB vs 589.3kB = .dockerignore cuts
+        the backend build context by ~99.6% (a ~244x reduction).
+
+----------------------------------------------------------------------
+Requirement: Build context size is minimized via .dockerignore (frontend)
+Command: DOCKER_BUILDKIT=0 docker build -f frontend/Dockerfile frontend --target builder -t civicpulse-frontend-legacy:tmp
+Output: Sending build context to Docker daemon  187.9kB
+Result: PASS — with frontend/.dockerignore present, context is 187.9kB
+
+Requirement: Build context WITHOUT .dockerignore (frontend) — proves the ignore file's effect
+Command: mv frontend/.dockerignore frontend/.dockerignore.bak
+         DOCKER_BUILDKIT=0 docker build -f frontend/Dockerfile frontend --target builder -t civicpulse-frontend-legacy2:tmp
+         mv frontend/.dockerignore.bak frontend/.dockerignore
+Output: Sending build context to Docker daemon  156.1MB
+Result: PASS — without .dockerignore, the local frontend/node_modules
+        (~156M on disk) is swept into the context. 187.9kB vs 156.1MB =
+        .dockerignore cuts the frontend build context by ~99.9% (a ~830x
+        reduction).
+
+----------------------------------------------------------------------
+Summary
+----------------------------------------------------------------------
+Service   | With .dockerignore | Without .dockerignore | Reduction
+----------|--------------------|------------------------|----------
+backend   | 589.3kB            | 143.8MB                | ~99.6%
+frontend  | 187.9kB            | 156.1MB                | ~99.9%
+
+Overall Result: PASS — .dockerignore is present and effective for both
+services, excluding local virtualenv/node_modules/git/test artifacts from
+the build context.

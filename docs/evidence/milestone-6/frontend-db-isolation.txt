@@ -1,0 +1,49 @@
+M6 Evidence: Frontend/Postgres network isolation
+======================================================================
+Generated: 2026-09-29 — full stack running via `docker compose up -d`
+
+----------------------------------------------------------------------
+Requirement: Stack is up and healthy before testing isolation
+Command: docker compose ps
+Output:
+NAME                IMAGE                     COMMAND                  SERVICE    CREATED          STATUS                    PORTS
+scd_a1-backend-1    civicpulse-backend:dev    "uvicorn app.main:ap…"   backend    5 minutes ago    Up 4 minutes (healthy)    0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+scd_a1-frontend-1   civicpulse-frontend:dev   "/docker-entrypoint.…"   frontend   33 seconds ago   Up 29 seconds (healthy)   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+scd_a1-postgres-1   postgres:16-alpine        "docker-entrypoint.s…"   postgres   5 minutes ago    Up 5 minutes (healthy)    5432/tcp
+scd_a1-redis-1      redis:7-alpine            "docker-entrypoint.s…"   redis      5 minutes ago    Up 5 minutes (healthy)    6379/tcp
+Result: PASS — all four services healthy; postgres/redis have no host
+        port bindings (correct — only reachable inside the internal
+        Docker network).
+
+----------------------------------------------------------------------
+Requirement: Confirm actual network membership of each container
+Command: docker inspect scd_a1-frontend-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+          docker inspect scd_a1-postgres-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+Output:
+frontend networks: scd_a1_edge
+postgres networks: scd_a1_internal
+Result: PASS — frontend is attached only to `edge`; postgres is attached
+        only to `internal` (internal: true). They do not share a network,
+        so Docker's embedded DNS gives frontend no route or name
+        resolution to postgres at all.
+
+----------------------------------------------------------------------
+Requirement: Prove frontend cannot reach PostgreSQL on the internal network
+Command: docker compose exec frontend wget -qO- --timeout=2 http://postgres:5432/
+Output:
+wget: bad address 'postgres:5432'
+Exit code: 1
+Result: PASS — connection failed as expected because PostgreSQL is
+        isolated on the `internal` network (`internal: true`) and
+        inaccessible from the frontend. The failure occurs at DNS
+        resolution ("bad address"), not merely at the TCP layer — the
+        frontend container isn't attached to `scd_a1_internal` at all
+        (confirmed above), so Docker's embedded DNS resolver has no
+        record for the `postgres` service name in frontend's network
+        namespace. This is a stronger isolation guarantee than a firewall
+        rule: the hostname is unroutable from the frontend container's
+        perspective, not merely port-blocked.
+
+----------------------------------------------------------------------
+Overall Result: PASS — frontend <-> postgres isolation is enforced by
+Docker network topology as designed (edge vs internal, internal: true).
