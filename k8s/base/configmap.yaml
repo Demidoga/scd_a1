@@ -1,0 +1,38 @@
+# Non-secret runtime configuration shared by the backend Deployment, the
+# migrate Job and (for POSTGRES_USER/POSTGRES_DB) the postgres StatefulSet.
+# Setting names mirror backend/app/core/config.py and compose.prod.yaml.
+# Environment-specific values (TRIAGE_PROVIDER) are patched in the overlays.
+# docs/architecture/kubernetes.md §7.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: civicpulse-config
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/part-of: civicpulse
+data:
+  # Overridden per overlay (dev=simulated, prod=llm).
+  TRIAGE_PROVIDER: "simulated"
+  LLM_MODEL: "openai/gpt-oss-20b"
+
+  # Database — the password is NOT here, it comes from the Secret.
+  POSTGRES_USER: "civicpulse"
+  POSTGRES_DB: "civicpulse"
+
+  # Service hostnames are Kubernetes Service names, never localhost.
+  REDIS_URL: "redis://redis:6379/0"
+
+  BACKEND_PORT: "8000"
+  LOG_LEVEL: "INFO"
+
+  RATE_LIMIT_REQUESTS: "10"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  STATS_CACHE_TTL_SECONDS: "30"
+  TRIAGE_CACHE_TTL_SECONDS: "86400"
+
+  # Behind the Ingress every request reaches the backend from the ingress
+  # controller's pod IP. Trusting X-Forwarded-For lets uvicorn report the real
+  # client IP, so the per-IP rate limiter doesn't put every user in one shared
+  # bucket. "*" is safe here because the backend Service is ClusterIP-only:
+  # the only things that can reach it are pods inside the cluster.
+  FORWARDED_ALLOW_IPS: "*"

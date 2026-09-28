@@ -1,0 +1,138 @@
+# FastAPI backend. Stateless, so it scales horizontally and rolls out with
+# zero voluntarily-unavailable replicas.
+#
+# Probes (docs/architecture/kubernetes.md §9) — do not swap these:
+#   startup   /health  "has the process finished booting?"   (no restart loops on slow boot)
+#   liveness  /health  "is the process alive?"               (DB/Redis-independent on purpose)
+#   readiness /ready   "should this pod receive traffic?"    (checks PostgreSQL + Redis)
+#
+# Graceful termination: on pod deletion the `preStop` sleep runs first, which
+# gives the Service/Ingress time to drop this pod from its endpoints while it
+# can still answer; only then does uvicorn get SIGTERM and drain in-flight
+# requests. terminationGracePeriodSeconds must exceed sleep + drain time.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  # Removed in Milestone 8 when the HPA takes over replica management.
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: civicpulse
+    spec:
+      # Kubernetes injects <SERVICE>_PORT=tcp://... env vars for every Service into
+      # every pod; e.g. the `backend` Service would set BACKEND_PORT to a URL and
+      # crash the app's integer BACKEND_PORT setting. Discovery here is by DNS name,
+      # so the injected variables are unused — turn them off.
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: backend
+          # Tag is a placeholder; each overlay rewrites name + tag with the
+          # immutable commit SHA. Never `latest`.
+          image: civicpulse-backend:REPLACE_WITH_SHA
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: civicpulse-config
+          env:
+            # Order matters: $(VAR) expansion only sees variables defined
+            # earlier in this list.
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: civicpulse-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: civicpulse-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: civicpulse-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: civicpulse-secrets
+                  key: LLM_API_KEY
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          # Backend's CPU request is the denominator the HPA's 60%-utilization
+          # target is computed against (Milestone 8).
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

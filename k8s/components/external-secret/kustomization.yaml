@@ -1,0 +1,19 @@
+# Removes the placeholder Secret (k8s/base/secret.yaml) from an overlay's
+# output. Real credentials are created out-of-band —
+# scripts/k8s/create-secrets.sh locally, GitHub Secrets in CD — so a
+# `kubectl apply -k` must never touch (and overwrite) them.
+#
+# Shared by both overlays so the rule lives in one place.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      kind: Secret
+      name: civicpulse-secrets
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: civicpulse-secrets

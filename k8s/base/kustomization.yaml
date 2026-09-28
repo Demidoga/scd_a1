@@ -1,0 +1,23 @@
+# Kustomize base: everything that is identical in every environment.
+# Environment differences (image names, TRIAGE_PROVIDER) live in
+# k8s/overlays/{dev,prod}. Build with: kubectl kustomize k8s/overlays/<env>
+#
+# Deliberately NOT listed here (added in Milestone 8): hpa.yaml, vpa.yaml —
+# the VPA custom resource definitions aren't installed yet, so including a
+# VerticalPodAutoscaler here would make `kubectl apply -k` fail.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: civicpulse
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres.yaml
+  - redis.yaml
+  - migrate-job.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+  - pdb.yaml

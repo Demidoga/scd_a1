@@ -106,6 +106,40 @@ initial `nginx.conf` was silently sending every `/api/...` request to a bare
 `uv run pytest tests/unit -q` (68 passed) and `npm run test` (8 passed) both
 still pass unchanged — this milestone touched no application code.
 
+**Milestone 7 — Kubernetes Baseline.** `k8s/base/` (namespace, ConfigMap, placeholder
+Secret, `postgres` StatefulSet with `volumeClaimTemplates`, `redis` Deployment
+with PVC and `strategy: Recreate`, `migrate` Job, `backend` and `frontend`
+Deployments at 2 replicas, 4 ClusterIP Services, Ingress `/`→frontend and
+`/api`→backend with no `host:`, backend PDB `minAvailable: 1`), overlays
+`dev` (local images, `TRIAGE_PROVIDER=simulated`) and `prod` (GHCR image
+names, `llm`), and the shared component `k8s/components/external-secret` that
+removes the placeholder Secret from both overlays (real credentials are made
+by `scripts/k8s/create-secrets.sh` from `.env`, and by CD later). Backend
+probes: startup+liveness `/health`, readiness `/ready`; `maxSurge: 1` /
+`maxUnavailable: 0`; `preStop` sleep; requests/limits on every container per
+`docs/architecture/kubernetes.md` §8. `scripts/k8s/` holds the workflow
+(`create-cluster`, `load-images`, `create-secrets`, `deploy`, `smoke-test`,
+`verify-persistence`) and the static checks (`validate-manifests.sh`,
+`check_manifest_invariants.py`). Design decisions and gotchas are in
+`docs/ENGINEERING-NOTES.md` (Milestone 7).
+
+**Verified live on a local k3d cluster (k3s v1.35.5, Docker Desktop):**
+- `scripts/k8s/validate-manifests.sh` clean for base/dev/prod (`kubeconform -strict` + invariants checker, itself mutation-tested against 11 broken variants).
+- `deploy.sh dev`: `job/migrate` reached `Complete` (after 3 in-place retries while Postgres started) before the rollouts; backend ×2, frontend ×2, `postgres-0`, `redis` all Ready.
+- `smoke-test.sh` through the Ingress on `localhost:8080`: SPA `200`, `/api/stats` `200 application/json`, `/api/meta/providers` `200`, complaint POST `201` + GET `200`.
+- `verify-persistence.sh`: a complaint survived `kubectl delete pod postgres-0` (new pod UID, same PVC).
+- Probe semantics: with Redis scaled to 0, both backend pods went `NotReady`, Service endpoints emptied, Ingress returned `503`, and `RESTARTS` stayed `0` (liveness is dependency-independent); everything recovered when Redis returned.
+- Rate limiter: `429` after 10 POSTs. Requests sent inside the cluster with `X-Forwarded-For: 203.0.113.77` were bucketed under that address, so `FORWARDED_ALLOW_IPS` works. (On k3d, external clients all appear as `10.42.0.1` — k3d's load balancer rewrites the source address.)
+- Rolling restart of the backend under a ~10 req/s `curl` loop: 62 requests, 0 non-200. This is a sanity check only; the formal `kubectl set image` + k6 zero-downtime demonstration is Milestone 8.
+- Seed: `kubectl exec deploy/backend -n civicpulse -- python -m app.seed` inserted 36 complaints.
+
+**Bugs/gotchas found by the live run (fixed or documented; details in `docs/ENGINEERING-NOTES.md`):**
+- Kubernetes service-link env vars (`BACKEND_PORT=tcp://...`) crashed the migrate Job → `enableServiceLinks: false` on every pod template, enforced by the invariants checker.
+- Repo-root `.env` did not exist (only `backend/.env`), so `create-secrets.sh` stopped; created it from `.env.example` (gitignored, dev-default password).
+- The k3d node could not pull from Docker Hub on this machine → optional `scripts/k8s/load-base-images.sh`.
+
+**Not done (Milestone 8 / by design):** formal zero-downtime evidence under k6 load, HPA/VPA, `prod` overlay applied to a cluster (only rendered/validated; its GHCR images don't exist until Milestone 9), `runAsNonRoot`.
+
 ## Known, deliberate gaps (not oversights)
 
 - **No Ollama.** Instructor-approved scope reduction — see ADR 0001 and
@@ -129,11 +163,12 @@ still pass unchanged — this milestone touched no application code.
 
 ## Next
 
-**Milestone 7 — Kubernetes Baseline.** Not started. The Compose topology
-(`edge`/`internal` networks, `migrate` job pattern, health-gated startup
-order) is designed to carry over directly per
-`docs/architecture/kubernetes.md` — don't redesign it, translate it.
+**Milestone 8 — HPA, VPA & operational testing.** Not started. Handoffs from
+M7: remove `replicas: 2` from the backend Deployment when the HPA is added;
+VPA needs its CRDs installed before `vpa.yaml` can be applied (k3s already
+bundles metrics-server); k6 must avoid `POST /api/complaints` or raise
+`RATE_LIMIT_REQUESTS` because of the 10 req/60s/IP limiter.
 
-After that, in order: 8 (HPA/VPA + load testing), 9 (CI/CD), 10
-(docs/evidence/hardening). See `docs/architecture/roadmap.md` and
-`docs/Milestones.md` for the full dependency chain.
+After that, in order: 9 (CI/CD), 10 (docs/evidence/hardening). See
+`docs/architecture/roadmap.md` and `docs/Milestones.md` for the full
+dependency chain.

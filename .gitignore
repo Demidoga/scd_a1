@@ -42,3 +42,6 @@ kubeconfig*.yaml
 # Misc local artifacts
 *.log
 docs/evidence/*.local.*
+
+# Local Kubernetes deploy helper (tag of the last locally-built images)
+.k8s-image-tag

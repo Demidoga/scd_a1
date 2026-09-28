@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Git repo (`main`/`dev`, remote `Demidoga/scd_a1`). **Milestones 1–6 are implemented**: `backend/` has the full four-layer backend (routes/services/repositories/providers), PostgreSQL schema via Alembic, the 3-provider AI triage pipeline, Redis caching/rate-limiting, and 112 passing tests at 94.5% coverage; `frontend/` has the React 18 + Vite + TypeScript + Tailwind app (submit/dashboard/stats views, typed API client, runtime-configured via same-origin `/api`, 8 Vitest component tests); the whole system is containerized (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`, `compose.yaml`/`compose.prod.yaml`, `edge`/`internal` networks, `migrate` service, `pgdata`/`redisdata` volumes) and verified end-to-end with Docker Desktop. `k8s/` and CI don't exist yet — that's Milestones 7–9. See `docs/progress.md` for the current, maintained snapshot of what's done/next; don't rely on this paragraph's specifics staying current, only `docs/progress.md`. When continuing implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec, not background reading.
+Git repo (`main`/`dev`, remote `Demidoga/scd_a1`). **Milestones 1–6 are implemented**: `backend/` has the full four-layer backend (routes/services/repositories/providers), PostgreSQL schema via Alembic, the 3-provider AI triage pipeline, Redis caching/rate-limiting, and 112 passing tests at 94.5% coverage; `frontend/` has the React 18 + Vite + TypeScript + Tailwind app (submit/dashboard/stats views, typed API client, runtime-configured via same-origin `/api`, 8 Vitest component tests); the whole system is containerized (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`, `compose.yaml`/`compose.prod.yaml`, `edge`/`internal` networks, `migrate` service, `pgdata`/`redisdata` volumes) and verified end-to-end with Docker Desktop. **Milestone 7 (Kubernetes baseline)** is implemented as Kustomize manifests (`k8s/base`, `k8s/components`, `k8s/overlays/{dev,prod}`) plus `scripts/k8s/`, statically validated and verified live on a local k3d cluster (deploy, Ingress, probes, Postgres persistence — see `docs/progress.md`). HPA/VPA/load testing and CI don't exist yet — that's Milestones 8–9. See `docs/progress.md` for the current, maintained snapshot of what's done/next; don't rely on this paragraph's specifics staying current, only `docs/progress.md`. When continuing implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec, not background reading.
 
 ## What CivicPulse is
 
@@ -36,6 +36,16 @@ An end-to-end municipal complaint intake, AI-assisted triage, persistence, and o
 | The full graded checklist | `docs/Todo.md` |
 
 Detailed decisions, schemas, workflows, and configuration belong in `docs/architecture/*.md`, never duplicated back into the router file.
+
+### Reading the assignment
+
+Whenever you need to check what the assignment requires or how it is graded (requirements, API contract, rubric marks, automatic deductions, submission, viva, engineering-notes questions):
+
+1. Open `docs/assignment/INDEX.md` and use its routing table to pick the relevant file(s) — the spec file for the topic, plus the matching `docs/assignment/rubric/*.md` file for grading.
+2. Read only those files.
+3. **Do not open `docs/Software Construction and Design -  Assignment 1.md` (or its `.pdf`)** to look things up. The split files are verbatim copies of it, so nothing is lost. Open the original only for a quirk the index flags as needing the PDF (garbled tables, flattened code blocks, the architecture diagram), or if the user explicitly asks for it.
+
+The assignment spec (`docs/assignment/`) says what is required; `docs/architecture/` says how this project satisfies it. Don't mix them up.
 
 ## Architecture at a glance
 
@@ -93,7 +103,7 @@ Full annotated version: `docs/architecture/repository-layout.md`.
 
 ## Commands
 
-Backend, frontend, and Docker Compose commands below are runnable today (Milestones 1–6 done; backend via `uv`, frontend via `npm`; see `README.md` for full local setup including the one-time Postgres role/DB creation). K8s commands remain aspirational until Milestones 7–9 land.
+Backend, frontend, and Docker Compose commands below are runnable today (Milestones 1–6 done; backend via `uv`, frontend via `npm`; see `README.md` for full local setup including the one-time Postgres role/DB creation). Kubernetes commands below are runnable for Milestone 7 (the manifests and `scripts/k8s/*`); HPA/VPA/load-test/CI commands remain aspirational until Milestones 8–9 land.
 
 - Backend lint/type: `uv run ruff check .`, `uv run mypy app` (run from `backend/`)
 - Backend tests: `uv run pytest tests/unit -q` (no DB needed) or `uv run pytest tests/ --cov=app --cov-report=term-missing -q` (full suite, needs local `civicpulse_test` Postgres + Redis db 15); CI/dev default `TRIAGE_PROVIDER=simulated`; coverage gate is ≥65% on `app/` (currently ~94.5%)
@@ -104,7 +114,8 @@ Backend, frontend, and Docker Compose commands below are runnable today (Milesto
 - Frontend build: `npm run build` — `tsc -b && vite build` (run from `frontend/`)
 - Frontend tests: `npm run test` (Vitest + Testing Library, run from `frontend/`)
 - Local stack: `docker compose up --build` (dev, hot-reload), `IMAGE_TAG=<sha> docker compose -f compose.prod.yaml up -d` (prod-shaped, pre-built images only)
-- K8s manifest validation: `kustomize build k8s/overlays/prod | kubeconform` — not yet written
+- K8s manifest validation (no cluster needed; needs `kubectl`, `kubeconform`, `uv`): `scripts/k8s/validate-manifests.sh`
+- K8s local deploy (needs Docker + `k3d` + `kubectl`): `scripts/k8s/create-cluster.sh` → `load-images.sh` → `create-secrets.sh` → `deploy.sh dev` → `smoke-test.sh` / `verify-persistence.sh`; `DRY_RUN=1 scripts/k8s/deploy.sh dev <tag>` just renders the manifests
 - Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w` — not yet written
 - Pre-submission check: `python scripts/check_submission.py` — not yet written
 

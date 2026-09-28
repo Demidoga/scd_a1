@@ -1,0 +1,24 @@
+# Production-shaped overlay: images come from GHCR, deployed by immutable
+# commit SHA (ADR 0003). The tag is a placeholder — CD substitutes the exact
+# SHA it just built and scanned (Milestone 9); `latest` is never a target.
+# The `ghcr.io/demidoga/...` names are provisional until the CD workflow fixes
+# the final registry paths.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/external-secret
+
+images:
+  - name: civicpulse-backend
+    newName: ghcr.io/demidoga/civicpulse-backend
+    newTag: REPLACE_WITH_SHA
+  - name: civicpulse-frontend
+    newName: ghcr.io/demidoga/civicpulse-frontend
+    newTag: REPLACE_WITH_SHA
+
+patches:
+  - path: configmap-patch.yaml

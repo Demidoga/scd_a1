@@ -1,0 +1,10 @@
+# Prod uses the hosted LLM provider (needs LLM_API_KEY in the real Secret).
+# If the provider fails or the key is missing, the triage pipeline falls back
+# to the rule-based provider (triaged_by = rules:fallback) — never a 500.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: civicpulse-config
+  namespace: civicpulse
+data:
+  TRIAGE_PROVIDER: "llm"

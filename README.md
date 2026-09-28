@@ -138,6 +138,34 @@ docker compose up -d
 # data in `pgdata`/`redisdata` volumes survives the cycle
 ```
 
+## Kubernetes (local k3d cluster)
+
+Runs the same images on a local Kubernetes cluster. Needs Docker,
+[`k3d`](https://k3d.io) (runs a small Kubernetes cluster inside Docker) and
+`kubectl` (the Kubernetes command-line client). `.env` must have
+`POSTGRES_PASSWORD` set (letters, digits and `. _ ~ -` only, because it is
+embedded in a URL).
+
+```bash
+scripts/k8s/create-cluster.sh    # k3d cluster; app will be on http://localhost:8080
+scripts/k8s/load-images.sh       # build both images, tag with the git SHA, load into the cluster
+scripts/k8s/create-secrets.sh    # real Secret from .env (never committed)
+scripts/k8s/deploy.sh dev        # apply k8s/overlays/dev, wait for migrate Job + rollouts
+
+scripts/k8s/smoke-test.sh        # frontend + API + complaint round trip via the Ingress
+scripts/k8s/verify-persistence.sh  # delete the Postgres pod, prove the data survives
+
+# only if postgres/redis pods sit in ImagePullBackOff (cluster can't reach Docker Hub):
+#   scripts/k8s/load-base-images.sh
+
+# optional: load the 36 sample complaints
+kubectl exec deploy/backend -n civicpulse -- python -m app.seed
+```
+
+Static check of the manifests (no cluster needed; needs `kubectl` and
+`kubeconform`): `scripts/k8s/validate-manifests.sh`. Design and the reasons
+behind each choice: `docs/architecture/kubernetes.md`.
+
 ## More
 
 Full docs, architecture, and milestone checklist live in `docs/` — see
