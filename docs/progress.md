@@ -63,6 +63,49 @@ required). Verified end-to-end against the real backend (Postgres + Redis +
 409 on an illegal transition → legal transition succeeds. Docker/nginx
 container build is explicitly out of scope here — that's Milestone 6.
 
+**Milestone 6 — Docker/Compose.** `backend/Dockerfile` (multi-stage
+`python:3.12-slim`, dependency-first COPY order via a stub package so
+`app/` edits don't invalidate the dependency layer, non-root `app` user,
+exec-form `CMD`, `HEALTHCHECK` against `/health`), `frontend/Dockerfile`
+(multi-stage `node:22-alpine` build → `nginx:1.27-alpine`, 74.5MB, no
+Node/node_modules/source in the runtime stage — verified), `frontend/nginx.conf`
+(same-origin `/api` proxy to the `backend` service, SPA fallback for React
+Router, DNS resolved at request time via Docker's embedded resolver so the
+container doesn't crash if `backend` is briefly unresolvable — this was hit
+and fixed during verification, see below). `.dockerignore` for both.
+`compose.yaml` (dev: `build:`, backend hot-reload bind mount on
+`backend/app`) and `compose.prod.yaml` (prod: `image: ${BACKEND_IMAGE}:${IMAGE_TAG}`
+/ `${FRONTEND_IMAGE}:${IMAGE_TAG}`, no `build:`). Both define `edge`/`internal`
+(`internal: true`) networks, `pgdata`/`redisdata` named volumes, the one-off
+`migrate` service (`alembic upgrade head`, `restart: "no"`,
+`service_completed_successfully` gating `backend`), healthchecks +
+`condition: service_healthy` on every dependency edge, `restart:
+unless-stopped`, and `deploy.resources.limits` on every service. Root
+`.env.example`/`.env` extended with `POSTGRES_USER/PASSWORD/DB` and
+`BACKEND_IMAGE`/`FRONTEND_IMAGE`/`IMAGE_TAG`. Generated
+`frontend/package-lock.json` (didn't exist before; needed for `npm ci` in
+the frontend Dockerfile).
+
+Verified live with Docker Desktop in this session: `docker compose up
+--build` brings up all four containers (`migrate` runs to completion and
+exits, not counted among the four) healthy; frontend→backend traffic
+confirmed through the nginx `/api` proxy (submit → simulated triage →
+persist → list, through port 8080 only); `docker exec frontend ... postgres`
+and `... redis` both fail at DNS resolution (network isolation intact);
+`docker compose down` + `up` preserves data in `pgdata` (a complaint
+submitted before `down` was still listed after); `compose.prod.yaml`
+verified separately by tagging the locally-built images with a fake commit
+SHA and running it standalone — healthy, only port 80 published (no
+backend/postgres/redis host ports), same persisted data visible through the
+shared volumes. Bug found and fixed during this verification: nginx's
+`proxy_pass` does not apply its usual location-prefix rewriting when the
+proxied host is a variable (needed for request-time DNS resolution) — the
+initial `nginx.conf` was silently sending every `/api/...` request to a bare
+`/api/` on the backend. Fixed by dropping the trailing URI from
+`proxy_pass` so the original request URI passes through unchanged.
+`uv run pytest tests/unit -q` (68 passed) and `npm run test` (8 passed) both
+still pass unchanged — this milestone touched no application code.
+
 ## Known, deliberate gaps (not oversights)
 
 - **No Ollama.** Instructor-approved scope reduction — see ADR 0001 and
@@ -86,14 +129,11 @@ container build is explicitly out of scope here — that's Milestone 6.
 
 ## Next
 
-**Milestone 6 — Docker/Compose.** Not started. Needs: `frontend/Dockerfile`
-(multi-stage `node:22-alpine` build → `nginx:1.27-alpine`, ~60MB target,
-`frontend/nginx.conf` implementing the `/api` proxy the frontend already
-assumes), `backend/Dockerfile`, `compose.yaml`/`compose.prod.yaml`,
-`edge`/`internal` networks, the dedicated `migrate` Compose service.
+**Milestone 7 — Kubernetes Baseline.** Not started. The Compose topology
+(`edge`/`internal` networks, `migrate` job pattern, health-gated startup
+order) is designed to carry over directly per
+`docs/architecture/kubernetes.md` — don't redesign it, translate it.
 
-After that, in order: 7–8 (Kubernetes baseline, then HPA/VPA + load
-testing), 9 (CI/CD), 10 (docs/evidence/hardening). See
-`docs/architecture/roadmap.md` and `docs/Milestones.md` for the full
-dependency chain — don't jump ahead to Kubernetes work while anything in the
-backend contract is still moving.
+After that, in order: 8 (HPA/VPA + load testing), 9 (CI/CD), 10
+(docs/evidence/hardening). See `docs/architecture/roadmap.md` and
+`docs/Milestones.md` for the full dependency chain.
