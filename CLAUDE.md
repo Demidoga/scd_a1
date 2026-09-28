@@ -29,6 +29,7 @@ An end-to-end municipal complaint intake, AI-assisted triage, persistence, and o
 | Unit/integration/component test requirements | `docs/architecture/testing.md` |
 | Network isolation, secrets, cross-cutting security | `docs/architecture/security.md` |
 | Full planned directory tree | `docs/architecture/repository-layout.md` |
+| The assignment spec itself (requirements, rubric, deductions, submission) — routed by task | `docs/assignment/INDEX.md` (verbatim split of the original assignment; not the architecture docs) |
 | Build-order dependency chain | `docs/architecture/roadmap.md` |
 | Detailed per-milestone task lists (working checklist) | `docs/Milestones.md`, `docs/Milestones/milestone-*.md` |
 | What can be built in parallel vs. what blocks what | `docs/Component_Dependencies.md` |
