@@ -184,7 +184,7 @@ jobs:
       # (docs/architecture/cicd.md §2 Security scan).
       - name: Install Trivy
         run: |
-          TRIVY_VERSION=0.58.2
+          TRIVY_VERSION=0.74.0
           curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"             | sudo tar -xz -C /usr/local/bin trivy
           trivy --version
 
