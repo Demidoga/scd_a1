@@ -162,6 +162,8 @@ jobs:
       - name: Cluster state (on failure)
         if: failure()
         run: |
-          kubectl get pods,jobs,events -n civicpulse --sort-by=.lastTimestamp
+          # --sort-by=.lastTimestamp only exists on events, so events get their own call.
+          kubectl get pods,jobs -n civicpulse || true
+          kubectl get events -n civicpulse --sort-by=.lastTimestamp || true
           kubectl logs job/migrate -n civicpulse --tail=100 || true
           kubectl logs deployment/backend -n civicpulse --tail=100 || true
