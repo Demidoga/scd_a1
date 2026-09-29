@@ -2,9 +2,8 @@
 # Environment differences (image names, TRIAGE_PROVIDER) live in
 # k8s/overlays/{dev,prod}. Build with: kubectl kustomize k8s/overlays/<env>
 #
-# Deliberately NOT listed here (added in Milestone 8): hpa.yaml, vpa.yaml —
-# the VPA custom resource definitions aren't installed yet, so including a
-# VerticalPodAutoscaler here would make `kubectl apply -k` fail.
+# hpa.yaml/vpa.yaml (Milestone 8) require the VPA CRDs to be installed on the
+# cluster before `kubectl apply -k` — see docs/ENGINEERING-NOTES.md Milestone 8.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -21,3 +20,5 @@ resources:
   - frontend.yaml
   - ingress.yaml
   - pdb.yaml
+  - hpa.yaml
+  - vpa.yaml

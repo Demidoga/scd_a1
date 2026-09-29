@@ -20,8 +20,9 @@ metadata:
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: civicpulse
 spec:
-  # Removed in Milestone 8 when the HPA takes over replica management.
-  replicas: 2
+  # No `replicas:` field — the HPA (k8s/base/hpa.yaml) owns replica count from
+  # here on. Leaving replicas: 2 here would fight it: kubectl apply -k would
+  # reset the count back to 2 on every deploy, racing the HPA's own decisions.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -110,14 +111,17 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           # Backend's CPU request is the denominator the HPA's 60%-utilization
-          # target is computed against (Milestone 8).
+          # target is computed against (Milestone 8). Updated from the
+          # original guess (100m/128Mi) to match backend-vpa's Target
+          # recommendation (cpu: 296m, memory: 250Mi) captured after a real
+          # k6 load test — see docs/ENGINEERING-NOTES.md Milestone 8.
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 500m
+              cpu: 300m
               memory: 256Mi
+            limits:
+              cpu: 750m
+              memory: 384Mi
 ---
 apiVersion: v1
 kind: Service
