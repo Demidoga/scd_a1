@@ -29,6 +29,11 @@ RUN pip install --no-cache-dir --no-deps .
 
 FROM python:3.12-slim AS runtime
 
+# The base image's system-Python build tools (pip/setuptools/wheel, with their
+# vendored msgpack) are unused at runtime — the app runs from /opt/venv — and
+# carry HIGH CVEs Trivy gates on. Remove them from the runtime image.
+RUN /usr/local/bin/python -m pip uninstall -y pip setuptools wheel
+
 RUN groupadd --system app && useradd --system --gid app --no-create-home --shell /usr/sbin/nologin app
 
 WORKDIR /app
@@ -37,6 +42,8 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1
 
 COPY --from=builder /opt/venv /opt/venv
+# Same reason for the venv's own pip (vendors msgpack/setuptools).
+RUN python -m pip uninstall -y pip
 COPY --from=builder /app/app ./app
 COPY --from=builder /app/alembic.ini ./
 COPY --from=builder /app/alembic ./alembic
