@@ -67,7 +67,8 @@ container build is explicitly out of scope here — that's Milestone 6.
 `python:3.12-slim`, dependency-first COPY order via a stub package so
 `app/` edits don't invalidate the dependency layer, non-root `app` user,
 exec-form `CMD`, `HEALTHCHECK` against `/health`), `frontend/Dockerfile`
-(multi-stage `node:22-alpine` build → `nginx:1.27-alpine`, 74.5MB, no
+(multi-stage `node:22-alpine` build → `nginx:1.27-alpine-slim`, 20.3MB
+(see M6 addendum below for the optimization history), no
 Node/node_modules/source in the runtime stage — verified), `frontend/nginx.conf`
 (same-origin `/api` proxy to the `backend` service, SPA fallback for React
 Router, DNS resolved at request time via Docker's embedded resolver so the
@@ -105,6 +106,56 @@ initial `nginx.conf` was silently sending every `/api/...` request to a bare
 `proxy_pass` so the original request URI passes through unchanged.
 `uv run pytest tests/unit -q` (68 passed) and `npm run test` (8 passed) both
 still pass unchanged — this milestone touched no application code.
+
+**Milestone 6 addendum — Docker verification pass (2026-09-29).** Re-verified
+against a real Docker Desktop engine on a fresh branch
+(`feature/m6-docker-verification`); evidence in
+`docs/evidence/milestone-6/`. Two genuine, previously-undetected bugs found
+and fixed with minimal changes (no architecture/app-code touched):
+
+- **`BACKEND_PORT` was inert.** It was piped into the `backend` container's
+  environment but nothing consumed it — `Dockerfile`'s `CMD`/`HEALTHCHECK`,
+  `compose.yaml`'s dev `command:` override, and the host port mapping all
+  hardcoded `8000`, and `frontend/nginx.conf`'s upstream is a hardcoded
+  `backend:8000` (container-to-container, same network — doesn't need to
+  vary). Fixed by making the **host-published** port follow the variable:
+  `compose.yaml` backend `ports:` is now `"${BACKEND_PORT:-8000}:8000"`.
+  Internal container port and the nginx upstream intentionally stay fixed
+  at 8000.
+- **Frontend `HEALTHCHECK` always failed.** `frontend/Dockerfile` probed
+  `http://localhost:8080/`, but the alpine image's `/etc/hosts` resolves
+  `localhost` to `::1` first and nginx's `listen 8080;` only binds IPv4 —
+  every check failed with connection-refused, so `frontend` never left
+  `health: starting`/reached `healthy`, and anything depending on it (there
+  is nothing today, but this would block future `depends_on:
+  service_healthy` edges onto `frontend`) would hang. Fixed by probing
+  `http://127.0.0.1:8080/` instead. Confirmed fixed: all four services
+  (`postgres`, `redis`, `backend`, `frontend`) reach `healthy` in
+  `docker compose ps` after the fix, including across a full
+  `down` → `up -d` cycle.
+
+Re-confirmed with real commands this session: `.dockerignore` reduces
+backend build context 589.3kB → would be 143.8MB without it (~99.6%
+reduction), frontend 187.9kB → would be 156.1MB without it (~99.9%
+reduction); frontend final image was initially 74.5MB (Node fully absent —
+confirmed via `which node npm` inside the running container — but ~24%
+over the ~60MB target, driven by `nginx:1.27-alpine`'s bundled dynamic
+modules — geoip/image-filter/njs/xslt — none of which
+`frontend/nginx.conf` uses). Optimized in a follow-up pass: swapped the
+runtime base to the official `nginx:1.27-alpine-slim` tag (no other
+Dockerfile/nginx.conf change) → 20.3MB, comfortably under target. Verified
+the swap doesn't break anything: `nginx -t` passes, `wget` (used by
+`HEALTHCHECK`) is present, the container reaches Docker `healthy`, HTTP 200
+served end-to-end, and the full `docker compose` stack still reaches
+`healthy` on all four services with the new image. Backend image 333MB;
+frontend→postgres
+isolation confirmed at the DNS layer (`frontend` is only on `edge`,
+`postgres` only on `internal`); a real inserted complaint row survived a
+full `docker compose down` (no `-v`) / `up -d` cycle with identical
+id/timestamp; exactly 2 named volumes (`pgdata`, `redisdata`), no
+`ollama_models` — consistent with the no-Ollama scope decision above;
+`compose.prod.yaml` re-confirmed to require `${IMAGE_TAG}`, publish only
+port 80 (frontend), and contain no dev bind mounts.
 
 **Milestone 7 — Kubernetes Baseline.** `k8s/base/` (namespace, ConfigMap, placeholder
 Secret, `postgres` StatefulSet with `volumeClaimTemplates`, `redis` Deployment

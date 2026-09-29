@@ -1,0 +1,93 @@
+M6 Evidence: Multi-stage build image sizes
+======================================================================
+Generated: 2026-09-29 (Docker Desktop v29.8.0, engine reachable, WSL2 backend)
+
+----------------------------------------------------------------------
+Requirement: Frontend build-stage (Node) image size
+Command: docker build -f frontend/Dockerfile frontend --target builder -t civicpulse-frontend:builder-stage
+         docker images civicpulse-frontend --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+Output:
+REPOSITORY            TAG             SIZE
+civicpulse-frontend   builder-stage   664MB
+Result: PASS (expected) — build stage contains Node 22, npm dependencies,
+        and TypeScript/Vite tooling; this stage is never shipped, only used
+        to produce /app/dist.
+
+----------------------------------------------------------------------
+Requirement: Frontend final runtime image size (nginx only, no Node)
+Command (initial measurement, nginx:1.27-alpine base):
+         docker build -f frontend/Dockerfile frontend -t civicpulse-frontend:dev
+         docker images civicpulse-frontend --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+         docker image inspect civicpulse-frontend:dev --format '{{.Size}}'
+Output:
+REPOSITORY            TAG   SIZE
+civicpulse-frontend   dev   74.5MB
+(docker image inspect exact bytes: 74544973 bytes = 74.5 MB)
+Initial result: FAIL vs ~60MB target — 74.5MB, about 24% above target.
+        `docker history` broke this down: the nginx:1.27-alpine base
+        itself accounted for ~53MB (8.5MB alpine rootfs + 5.36MB nginx
+        package + 38.7MB for the upstream image's bundled dynamic
+        modules: geoip, image-filter, njs, xslt), none of which
+        frontend/nginx.conf uses. App payload (nginx.conf + built dist/ +
+        user/permission setup) was under 1MB.
+
+Optimization applied: swapped the runtime base in frontend/Dockerfile from
+`nginx:1.27-alpine` to `nginx:1.27-alpine-slim` (an official upstream tag
+that omits the geoip/image-filter/njs/xslt modules frontend/nginx.conf
+never references). No other Dockerfile or nginx.conf change.
+
+Command (post-optimization):
+         docker build -f frontend/Dockerfile frontend -t civicpulse-frontend:dev
+         docker images civicpulse-frontend --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+         docker image inspect civicpulse-frontend:dev --format '{{.Size}}'
+Output:
+REPOSITORY            TAG   SIZE
+civicpulse-frontend   dev   20.3MB
+(docker image inspect exact bytes: 20344233 bytes = 20.3 MB)
+Result: PASS — 20.3MB, well under the ~60MB target (a ~73% reduction from
+        the 74.5MB pre-optimization measurement).
+
+Requirement: Confirm the slim base doesn't break nginx or the healthcheck
+Command: docker run -d --name frontend-slim-test -p 18080:8080 civicpulse-frontend:slim-test
+         docker exec frontend-slim-test sh -c "which wget nginx; nginx -v; nginx -t"
+         docker exec frontend-slim-test wget -qO- --timeout=2 http://127.0.0.1:8080/
+         docker inspect frontend-slim-test --format '{{json .State.Health}}'
+         curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:18080/
+Output:
+/usr/bin/wget
+/usr/sbin/nginx
+nginx version: nginx/1.27.5
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+<!doctype html> ... (index.html served correctly)
+{"Status":"healthy","FailingStreak":0,"Log":[{"ExitCode":0,"Output":""}]}
+HTTP 200
+Result: PASS — wget (used by HEALTHCHECK) and nginx both present in the
+        slim image; config test passes; container reaches Docker
+        `healthy` status; page serves HTTP 200 end-to-end. Re-verified
+        integrated into the full `docker compose up -d` stack afterward:
+        all four services (postgres, redis, backend, frontend) reached
+        `healthy`.
+
+Requirement: Confirm Node/build tooling is absent from the runtime image
+Command: docker exec frontend-slim-test sh -c "which node npm"
+Output: (no output — exit code 1)
+Result: PASS — node/npm absent from PATH; only nginx is present in the
+        runtime image.
+
+----------------------------------------------------------------------
+Requirement: Backend final image size
+Command: docker build -f backend/Dockerfile backend -t civicpulse-backend:dev
+         docker images civicpulse-backend --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+         docker image inspect civicpulse-backend:dev --format '{{.Size}}'
+Output:
+REPOSITORY           TAG       SIZE
+civicpulse-backend   dev       333MB
+(docker image inspect exact bytes: 333089367 bytes = 333.1 MB)
+Result: PASS (informational — no explicit MB target was set for backend).
+        Multi-stage build confirmed: builder stage installs into a venv
+        via pip, runtime stage (python:3.12-slim) copies only /opt/venv +
+        app + alembic — no build toolchain, no pip cache, no source outside
+        /app/app.
+
+----------------------------------------------------------------------

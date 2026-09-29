@@ -15,7 +15,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.27-alpine-slim AS runtime
 
 # Pull in the latest patched Alpine packages (openssl, libxml2, musl, ...) so
 # the Trivy gate passes regardless of when the base image was last rebuilt.
@@ -35,7 +35,10 @@ USER app
 
 EXPOSE 8080
 
+# 127.0.0.1, not localhost: this image's /etc/hosts resolves localhost to
+# ::1 first, but nginx's `listen 8080;` only binds IPv4 — wget against
+# localhost gets connection-refused on the (unlistened) IPv6 loopback.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

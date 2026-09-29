@@ -95,8 +95,12 @@ services:
     # picks up changes without rebuilding the image.
     volumes:
       - ./backend/app:/app/app
+    # BACKEND_PORT only remaps the host-published port; the container always
+    # listens on 8000 internally (matches the Dockerfile CMD/HEALTHCHECK and
+    # nginx's hardcoded `backend:8000` upstream), so changing it needs no
+    # other file edited.
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy

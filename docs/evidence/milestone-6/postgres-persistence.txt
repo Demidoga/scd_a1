@@ -1,0 +1,54 @@
+M6 Evidence: PostgreSQL data persistence across `docker compose down`/`up`
+======================================================================
+Generated: 2026-09-29
+
+----------------------------------------------------------------------
+Requirement: Insert an identifiable test record while the stack is running
+Command: docker compose exec postgres psql -U civicpulse -d civicpulse -c "INSERT INTO complaints (text, location, category, priority, status, triaged_by, triage_latency_ms) VALUES ('M6-PERSISTENCE-TEST-9f3a2b: verify data survives docker compose down/up', 'M6-Test-Location', 'other', 'low', 'open', 'simulated', 1) RETURNING id, text, created_at;"
+Output:
+                  id                  |                                  text                                   |          created_at
+---------------------------------------+-------------------------------------------------------------------------+-------------------------------
+ 5627bafb-c864-47e5-ac96-732235933035 | M6-PERSISTENCE-TEST-9f3a2b: verify data survives docker compose down/up | 2026-09-28 21:21:15.650776+00
+(1 row)
+
+INSERT 0 1
+Result: PASS — row inserted with id 5627bafb-c864-47e5-ac96-732235933035.
+
+----------------------------------------------------------------------
+Requirement: Stop the stack WITHOUT deleting volumes
+Command: docker compose down
+Output: (containers + networks removed; volumes NOT listed as removed)
+Verification: docker volume ls | grep scd_a1
+             local     scd_a1_pgdata
+             local     scd_a1_redisdata
+Result: PASS — `-v` was not used; both named volumes remain on disk after
+        `down`.
+
+----------------------------------------------------------------------
+Requirement: Restart the stack
+Command: docker compose up -d
+Output: postgres, redis reach healthy -> migrate runs `alembic upgrade head`
+        and exits 0 -> backend reaches healthy -> frontend starts.
+        (full startup log omitted here; see frontend-db-isolation.txt for
+        an equivalent `docker compose ps` healthy-state capture)
+Result: PASS — stack restarted cleanly against the pre-existing pgdata
+        volume (no fresh-DB re-initialization messages from postgres).
+
+----------------------------------------------------------------------
+Requirement: Prove the exact test row survived the restart
+Command: docker compose exec postgres psql -U civicpulse -d civicpulse -c "SELECT id, text, location, created_at FROM complaints WHERE text LIKE 'M6-PERSISTENCE-TEST%';"
+Output:
+                  id                  |                                  text                                   |     location     |          created_at
+---------------------------------------+-------------------------------------------------------------------------+------------------+-------------------------------
+ 5627bafb-c864-47e5-ac96-732235933035 | M6-PERSISTENCE-TEST-9f3a2b: verify data survives docker compose down/up | M6-Test-Location | 2026-09-28 21:21:15.650776+00
+(1 row)
+Result: PASS — identical id (5627bafb-c864-47e5-ac96-732235933035) and
+        identical created_at timestamp (2026-09-28 21:21:15.650776+00) as
+        the pre-restart insert, proving the `pgdata` named volume
+        persisted the data across the full container lifecycle
+        (down -> up), not merely across a container restart.
+
+----------------------------------------------------------------------
+Overall Result: PASS — PostgreSQL persistence via the `pgdata` named
+volume is confirmed with a real, identifiable row surviving a full
+`docker compose down` / `docker compose up -d` cycle.

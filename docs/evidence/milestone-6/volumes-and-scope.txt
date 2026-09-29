@@ -1,0 +1,78 @@
+M6 Evidence: Named volumes & LLM architecture scope
+======================================================================
+Generated: 2026-09-29
+
+----------------------------------------------------------------------
+Requirement: List active named volumes
+Command: docker volume ls --format "table {{.Driver}}\t{{.Name}}" | grep scd_a1
+Output:
+local     scd_a1_pgdata
+local     scd_a1_redisdata
+Result: PASS — exactly 2 named volumes are active.
+
+Requirement: Confirm the volume set declared in compose matches (no drift)
+Command: docker compose config --volumes
+Output:
+redisdata
+pgdata
+Result: PASS — matches compose.yaml's `volumes:` block (pgdata, redisdata)
+        exactly.
+
+Requirement: Confirm no `ollama_models` volume or reference exists anywhere
+Command: docker volume ls (full listing, filtered above) + grep -rn "ollama" compose.yaml compose.prod.yaml
+Output: (no matches for "ollama" in either compose file; no ollama_models
+        volume present in `docker volume ls`)
+Result: PASS — no leftover or stray Ollama volume/service definitions.
+
+----------------------------------------------------------------------
+Requirement: Volume detail (mountpoint, driver, compose labels)
+Command: docker volume inspect scd_a1_pgdata scd_a1_redisdata
+Output:
+[
+  {
+    "Driver": "local",
+    "Mountpoint": "/var/lib/docker/volumes/scd_a1_pgdata/_data",
+    "Name": "scd_a1_pgdata",
+    "Labels": { "com.docker.compose.volume": "pgdata", ... }
+  },
+  {
+    "Driver": "local",
+    "Mountpoint": "/var/lib/docker/volumes/scd_a1_redisdata/_data",
+    "Name": "scd_a1_redisdata",
+    "Labels": { "com.docker.compose.volume": "redisdata", ... }
+  }
+]
+Result: PASS — both volumes are Docker-managed local volumes, correctly
+        scoped to this compose project.
+
+----------------------------------------------------------------------
+Architectural note: why 2 volumes is the correct, complete count
+----------------------------------------------------------------------
+CivicPulse's triage/LLM feature is served by an EXTERNAL, cloud-hosted LLM
+API (Groq/Grok-compatible API key, configured via LLM_API_KEY / LLM_MODEL
+in .env; see compose.yaml's `backend` service environment block and
+backend/app/core/config.py). There is no self-hosted Ollama container in
+this stack (confirmed: no `ollama` service definition in compose.yaml or
+compose.prod.yaml, and TRIAGE_PROVIDER supports `llm | rules | simulated`
+where `llm` calls the external hosted API rather than a local model
+runtime).
+
+Consequently, an `ollama_models` volume — which would only exist to cache
+locally-pulled model weights for a self-hosted Ollama container — is
+architecturally N/A, not missing. The system has exactly two stateful
+services that require durable storage across container recreation:
+
+  1. pgdata     — PostgreSQL data directory (/var/lib/postgresql/data).
+                  Required: complaint records must survive redeploys.
+  2. redisdata  — Redis AOF persistence (/data, `--appendonly yes`).
+                  Required: cache/rate-limit state survives restarts
+                  (though Redis here is a cache, not a system of record).
+
+Under this cloud-LLM architecture, 2 named volumes represents 100%
+compliance — there is no third volume to be "missing." Verified in this
+session via `docker compose up -d` / `down` / `up -d` (see
+postgres-persistence.txt): pgdata correctly persisted a real inserted row
+across a full container lifecycle.
+
+Result: PASS — 2/2 required volumes present; ollama_models correctly
+absent per the documented cloud-LLM architectural choice.
