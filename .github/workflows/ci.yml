@@ -182,23 +182,21 @@ jobs:
       # --ignore-unfixed: fail only on HIGH/CRITICAL findings that have a
       # fixed version available — matches the assignment's exact gate
       # (docs/architecture/cicd.md §2 Security scan).
+      - name: Install Trivy
+        run: |
+          TRIVY_VERSION=0.58.2
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"             | sudo tar -xz -C /usr/local/bin trivy
+          trivy --version
+
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: civicpulse-backend:dev
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+        run: >
+          trivy image --severity HIGH,CRITICAL --ignore-unfixed
+          --exit-code 1 civicpulse-backend:dev
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: civicpulse-frontend:dev
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
+        run: >
+          trivy image --severity HIGH,CRITICAL --ignore-unfixed
+          --exit-code 1 civicpulse-frontend:dev
 
   manifests:
     name: Validate Kubernetes manifests
