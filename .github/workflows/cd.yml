@@ -1,12 +1,14 @@
 name: CD
 
-# Push to main = build once, deploy many (docs/architecture/cicd.md §6).
+# Push to main (or dev) = build once, deploy many (docs/architecture/cicd.md §6).
 # Never triggered by a PR — main only moves via an already-CI-passed,
 # approved PR, so `test` here is a second, belt-and-braces run of the exact
 # same gate against the merged commit before anything is published.
+# dev is included so the pipeline can be exercised before merging; images are
+# still tagged and deployed by commit SHA, never by `latest`.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -144,6 +146,15 @@ jobs:
             --from-env-file="$env_tmp" \
             --dry-run=client -o yaml | kubectl apply -f -
           rm -f "$env_tmp"
+
+      # k3d does not bundle the VPA CRDs, and the overlay contains a
+      # VerticalPodAutoscaler object, so kubectl apply fails without them.
+      # Only the CRDs are needed here (no recommender) — the object just has
+      # to be accepted by the API server.
+      - name: Install VPA CRDs
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vertical-pod-autoscaler-1.4.1/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+          kubectl wait --for=condition=Established crd/verticalpodautoscalers.autoscaling.k8s.io --timeout=60s
 
       # Reuses scripts/k8s/deploy.sh unchanged — same tag-pinning, same
       # "delete Job/migrate -> apply -> wait Complete -> wait rollouts"
