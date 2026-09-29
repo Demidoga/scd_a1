@@ -147,6 +147,15 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
           rm -f "$env_tmp"
 
+      # k3d does not bundle the VPA CRDs, and the overlay contains a
+      # VerticalPodAutoscaler object, so kubectl apply fails without them.
+      # Only the CRDs are needed here (no recommender) — the object just has
+      # to be accepted by the API server.
+      - name: Install VPA CRDs
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vertical-pod-autoscaler-1.4.1/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+          kubectl wait --for=condition=Established crd/verticalpodautoscalers.autoscaling.k8s.io --timeout=60s
+
       # Reuses scripts/k8s/deploy.sh unchanged — same tag-pinning, same
       # "delete Job/migrate -> apply -> wait Complete -> wait rollouts"
       # sequence used locally (docs/architecture/cicd.md §3, kubernetes.md §14).
