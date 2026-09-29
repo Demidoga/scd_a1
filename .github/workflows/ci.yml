@@ -168,7 +168,14 @@ jobs:
     name: Trivy vulnerability scan
     needs: build
     runs-on: ubuntu-latest
+    env:
+      TRIVY_DB_REPOSITORY: mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2
+      TRIVY_JAVA_DB_REPOSITORY: mirror.gcr.io/aquasec/trivy-java-db:1,ghcr.io/aquasecurity/trivy-java-db:1,public.ecr.aws/aquasecurity/trivy-java-db:1
     steps:
+      - name: Get date for cache key
+        id: date
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           name: docker-images
@@ -188,22 +195,38 @@ jobs:
           curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"             | sudo tar -xz -C /usr/local/bin trivy
           trivy --version
 
-      # The default DB host (ghcr.io) rate-limits anonymous CI pulls
-      # (TOOMANYREQUESTS); the ECR Public mirror carries the same DB.
+      # Every public Trivy DB host rate-limits anonymous CI pulls at times
+      # (TOOMANYREQUESTS). Three defences: (1) a comma-separated mirror list —
+      # Trivy tries each in order; (2) the DB is cached between runs, keyed
+      # per day so it still refreshes daily; (3) the download is its own step
+      # with retries, and the scans then run with --skip-db-update.
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ steps.date.outputs.day }}
+          restore-keys: trivy-db-
+
+      - name: Download Trivy DB
+        run: |
+          for attempt in 1 2 3 4 5; do
+            trivy image --download-db-only && trivy image --download-java-db-only && exit 0
+            echo "Trivy DB download failed (attempt ${attempt}); retrying in $((attempt * 20))s"
+            sleep $((attempt * 20))
+          done
+          echo "Could not download the Trivy DB from any mirror" >&2
+          exit 1
+
       - name: Scan backend image
-        env:
-          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
-          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
         run: >
-          trivy image --severity HIGH,CRITICAL --ignore-unfixed
+          trivy image --skip-db-update --skip-java-db-update
+          --severity HIGH,CRITICAL --ignore-unfixed
           --exit-code 1 civicpulse-backend:dev
 
       - name: Scan frontend image
-        env:
-          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
-          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
         run: >
-          trivy image --severity HIGH,CRITICAL --ignore-unfixed
+          trivy image --skip-db-update --skip-java-db-update
+          --severity HIGH,CRITICAL --ignore-unfixed
           --exit-code 1 civicpulse-frontend:dev
 
   manifests:
