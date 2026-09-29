@@ -1,0 +1,25 @@
+# Vertical Pod Autoscaler for the backend, recommender-only (Milestone 8,
+# docs/assignment/12-kubernetes-autoscaling.md). updateMode "Off" means the
+# VPA computes and reports Target/Lower/Upper bound recommendations but never
+# evicts a pod to apply them — a human reads `kubectl describe vpa backend-vpa`
+# and edits backend.yaml's resources.requests by hand.
+#
+# Why not "Auto": the HPA above scales replica count on the same CPU signal
+# a VPA in Auto mode would be adjusting the request for. See
+# docs/ENGINEERING-NOTES.md Milestone 8 section for the feedback-loop this
+# would create.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: backend-vpa
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  updatePolicy:
+    updateMode: "Off"

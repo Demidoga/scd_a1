@@ -67,7 +67,7 @@
 -   [x] Spread seed data across categories. (all 6)
 -   [ ] Verify seed runs twice without duplicates. (idempotency check exists in code, not demonstrated/tested)
 -   [ ] Verify Compose restart preserves data.
--   [ ] Verify Kubernetes Postgres pod deletion preserves data.
+-   [x] Verify Kubernetes Postgres pod deletion preserves data. (`scripts/k8s/verify-persistence.sh`, verified live)
 
 ## 3. API
 
@@ -134,8 +134,8 @@
 -   [x] Return `Retry-After`.
 -   [x] Fail closed (`503`) on Redis outage for the rate limiter. (unit-tested, `test_redis_fail_modes.py`)
 -   [x] Fail open (degrade to direct query/provider call) on Redis outage for stats cache and triage cache. (unit-tested)
--   [ ] Enable Redis AOF. (infra config — belongs to the not-yet-built Compose/K8s Redis service)
--   [ ] Store Redis data on named volume. (infra — same as above)
+-   [x] Enable Redis AOF. (`--appendonly yes` in both Compose files and `k8s/base/redis.yaml`)
+-   [x] Store Redis data on named volume. (`redisdata` in Compose; PVC `redis-data` in Kubernetes)
 -   [x] Document the AOF volume decision. (`docs/ENGINEERING-NOTES.md`)
 
 ## 6. AI Triage
@@ -180,7 +180,7 @@
 -   [ ] Report the measured hit rate. (no observed number recorded — needs real/load traffic)
 -   [x] Never log API keys.
 -   [x] Load API keys from environment variables.
--   [ ] Store Kubernetes API keys in Secrets.
+-   [x] Store Kubernetes API keys in Secrets.
 -   [ ] Store CI credentials in GitHub Secrets.
 -   [x] Treat complaint text as untrusted data.
 -   [x] Add prompt-injection guardrail.
@@ -332,52 +332,54 @@
 
 ## 13. Kubernetes Base
 
--   [ ] Use k3d (architecture decision — not kind; built-in Traefik).
--   [ ] Set up Kustomize.
--   [ ] Create `k8s/base`.
--   [ ] Create `k8s/overlays/dev`.
--   [ ] Create `k8s/overlays/prod`.
--   [ ] Create `civicpulse` namespace.
--   [ ] Deploy backend with at least 2 replicas.
--   [ ] Deploy frontend with at least 2 replicas.
--   [ ] Deploy PostgreSQL as StatefulSet.
--   [ ] Add PostgreSQL PVC via `volumeClaimTemplates`.
--   [ ] Deploy Redis.
--   [ ] Use `strategy: Recreate` for the Redis Deployment (RWO PVC would deadlock a RollingUpdate).
--   [ ] Add Redis PVC.
--   [ ] Create `migrate` Kubernetes `Job` for migrations (never an `initContainer`); must reach `Complete` before the app receives traffic.
--   [ ] Create four ClusterIP services.
--   [ ] Keep database away from NodePort/LoadBalancer.
--   [ ] Create Ingress.
--   [ ] Route `/` to frontend.
--   [ ] Route `/api` to backend.
--   [ ] Use one host.
--   [ ] Create ConfigMap.
--   [ ] Create Secret.
--   [ ] Keep secrets out of committed manifests.
--   [ ] Commit placeholders only.
+> Milestone 7 status: every manifest below is written and passes `scripts/k8s/validate-manifests.sh` (kustomize build + kubeconform + invariants). The live k3d deploy has been run and verified (`docs/progress.md`). Rolling-update-under-load evidence belongs to Milestone 8.
+
+-   [x] Use k3d (architecture decision — not kind; built-in Traefik).
+-   [x] Set up Kustomize.
+-   [x] Create `k8s/base`.
+-   [x] Create `k8s/overlays/dev`.
+-   [x] Create `k8s/overlays/prod`.
+-   [x] Create `civicpulse` namespace.
+-   [x] Deploy backend with at least 2 replicas.
+-   [x] Deploy frontend with at least 2 replicas.
+-   [x] Deploy PostgreSQL as StatefulSet.
+-   [x] Add PostgreSQL PVC via `volumeClaimTemplates`.
+-   [x] Deploy Redis.
+-   [x] Use `strategy: Recreate` for the Redis Deployment (RWO PVC would deadlock a RollingUpdate).
+-   [x] Add Redis PVC.
+-   [x] Create `migrate` Kubernetes `Job` for migrations (never an `initContainer`); must reach `Complete` before the app receives traffic. (verified live: `deploy.sh` waited for `Complete` before the rollouts)
+-   [x] Create four ClusterIP services.
+-   [x] Keep database away from NodePort/LoadBalancer.
+-   [x] Create Ingress.
+-   [x] Route `/` to frontend.
+-   [x] Route `/api` to backend.
+-   [x] Use one host.
+-   [x] Create ConfigMap.
+-   [x] Create Secret.
+-   [x] Keep secrets out of committed manifests.
+-   [x] Commit placeholders only.
 
 ## 14. Kubernetes Probes and Updates
 
--   [ ] Add startup probe.
--   [ ] Use `/health` for startup probe.
--   [ ] Add liveness probe.
--   [ ] Keep liveness independent of database.
--   [ ] Add readiness probe.
--   [ ] Use `/ready` for readiness.
--   [ ] Make readiness depend on dependencies.
--   [ ] Configure `maxSurge: 1`.
--   [ ] Configure `maxUnavailable: 0`.
--   [ ] Set termination grace period.
--   [ ] Add `preStop` sleep.
+-   [x] Add startup probe.
+-   [x] Use `/health` for startup probe.
+-   [x] Add liveness probe.
+-   [x] Keep liveness independent of database.
+-   [x] Add readiness probe.
+-   [x] Use `/ready` for readiness.
+-   [x] Make readiness depend on dependencies.
+-   [x] Configure `maxSurge: 1`.
+-   [x] Configure `maxUnavailable: 0`.
+-   [x] Set termination grace period.
+-   [x] Add `preStop` sleep.
 -   [ ] Demonstrate rolling update.
 -   [ ] Test zero failed requests under load.
 
 ## 15. Kubernetes Resources and HPA
 
--   [ ] Set CPU requests on every container.
--   [ ] Set CPU limits on every container.
--   [ ] Set memory requests/limits as appropriate.
+-   [x] Set CPU requests on every container.
+-   [x] Set CPU limits on every container.
+-   [x] Set memory requests/limits as appropriate.
 -   [ ] Install metrics-server.
 -   [ ] Create HPA v2 for backend.
 -   [ ] Set minimum replicas to 2.

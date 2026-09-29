@@ -17,6 +17,10 @@ RUN npm run build
 
 FROM nginx:1.27-alpine-slim AS runtime
 
+# Pull in the latest patched Alpine packages (openssl, libxml2, musl, ...) so
+# the Trivy gate passes regardless of when the base image was last rebuilt.
+RUN apk upgrade --no-cache
+
 RUN addgroup -S app && adduser -S app -G app
 
 COPY --from=builder /app/dist /usr/share/nginx/html
