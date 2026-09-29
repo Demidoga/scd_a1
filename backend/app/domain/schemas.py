@@ -8,9 +8,10 @@ evolve independently. docs/Milestones/milestone-1.md §B/§C.
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.domain.enums import Category, Priority, Status
+from app.domain.transitions import allowed_next_statuses
 
 
 class ComplaintCreate(BaseModel):
@@ -45,6 +46,12 @@ class ComplaintResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def allowed_transitions(self) -> list[Status]:
+        """Statuses this complaint may move to next, so the UI needs no copy of the table."""
+        return allowed_next_statuses(self.status)
 
 
 class ComplaintListResponse(BaseModel):

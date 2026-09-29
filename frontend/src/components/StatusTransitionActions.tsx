@@ -1,13 +1,10 @@
 import type { Status } from '../api/types'
 
-// Deliberately does NOT encode the transition table (open -> in_progress ->
-// resolved/rejected, etc) — see docs/architecture/backend.md §4. The only
-// UI-level knowledge here is "terminal statuses have no further actions",
-// which is a property of the complaint's own current status, not a copy of
-// the legality table. Every button click still goes through the backend,
-// which is the sole authority on whether a transition is legal; an illegal
-// click surfaces the backend's 409 message verbatim (see DashboardPage).
-const TERMINAL: Status[] = ['resolved', 'rejected']
+// Deliberately does NOT encode the transition table — see
+// docs/architecture/backend.md §4. The backend sends each complaint's
+// `allowed_transitions`, and this component only renders a button for each
+// of those. The backend remains the sole authority: a click is still
+// validated server-side, and a 409 is shown verbatim (see DashboardPage).
 
 const ACTIONS: { target: Status; label: string; className: string }[] = [
   {
@@ -28,19 +25,19 @@ const ACTIONS: { target: Status; label: string; className: string }[] = [
 ]
 
 interface Props {
-  status: Status
+  allowedTransitions: Status[]
   disabled?: boolean
   onTransition: (target: Status) => void
 }
 
-export function StatusTransitionActions({ status, disabled, onTransition }: Props) {
-  if (TERMINAL.includes(status)) {
+export function StatusTransitionActions({ allowedTransitions, disabled, onTransition }: Props) {
+  if (allowedTransitions.length === 0) {
     return <span className="text-xs text-zinc-500">No further actions</span>
   }
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {ACTIONS.filter((a) => a.target !== status).map((action) => (
+      {ACTIONS.filter((a) => allowedTransitions.includes(a.target)).map((action) => (
         <button
           key={action.target}
           type="button"

@@ -110,6 +110,21 @@ def test_valid_status_transition_returns_200(client: TestClient) -> None:
     assert response.json()["status"] == "in_progress"
 
 
+def test_response_lists_allowed_transitions_for_each_status(client: TestClient) -> None:
+    created = client.post("/api/complaints", json=VALID_PAYLOAD).json()
+    assert created["allowed_transitions"] == ["in_progress", "rejected"]
+
+    in_progress = client.patch(
+        f"/api/complaints/{created['id']}/status", json={"status": "in_progress"}
+    ).json()
+    assert in_progress["allowed_transitions"] == ["resolved", "rejected"]
+
+    resolved = client.patch(
+        f"/api/complaints/{created['id']}/status", json={"status": "resolved"}
+    ).json()
+    assert resolved["allowed_transitions"] == []
+
+
 def test_invalid_status_transition_returns_409_naming_attempt(client: TestClient) -> None:
     created = client.post("/api/complaints", json=VALID_PAYLOAD).json()
     # open -> resolved is not allowed (must go through in_progress first)

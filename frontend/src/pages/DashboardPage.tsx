@@ -144,7 +144,7 @@ export function DashboardPage() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusTransitionActions
-                        status={c.status}
+                        allowedTransitions={c.allowed_transitions}
                         disabled={pendingId === c.id}
                         onTransition={(target) => handleTransition(c.id, target)}
                       />

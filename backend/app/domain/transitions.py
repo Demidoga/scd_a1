@@ -17,3 +17,8 @@ ALLOWED_TRANSITIONS: dict[Status, frozenset[Status]] = {
 
 def is_transition_allowed(current: Status, target: Status) -> bool:
     return target in ALLOWED_TRANSITIONS[current]
+
+
+def allowed_next_statuses(current: Status) -> list[Status]:
+    """Legal targets from `current`, in stable enum order (for API responses)."""
+    return [status for status in Status if status in ALLOWED_TRANSITIONS[current]]

@@ -37,6 +37,7 @@ export interface ComplaintResponse {
   category: Category
   priority: Priority
   status: Status
+  allowed_transitions: Status[]
   ai_summary: string | null
   triaged_by: string
   triage_latency_ms: number

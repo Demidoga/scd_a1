@@ -169,6 +169,8 @@ Implementation must use an explicit transition table/data structure rather than 
 
 The frontend must not duplicate this table; it should render actions based on backend responses or backend-provided state.
 
+Implemented as an additive, read-only `allowed_transitions: Status[]` field on every `ComplaintResponse` (derived from the table in `app/domain/transitions.py`). The dashboard renders one action button per listed status, so it never offers a move the backend would answer with `409`. The `409` path still exists for stale data (e.g. another operator changed the complaint first).
+
 ## 5. Error and Failure Architecture
 
 ### Client validation failures

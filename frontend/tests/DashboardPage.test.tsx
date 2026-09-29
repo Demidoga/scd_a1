@@ -13,6 +13,7 @@ function complaint(overrides: Partial<ComplaintResponse> = {}): ComplaintRespons
     category: 'streetlights',
     priority: 'normal',
     status: 'open',
+    allowed_transitions: ['in_progress', 'rejected'],
     ai_summary: 'Broken streetlight.',
     triaged_by: 'rules',
     triage_latency_ms: 5,
@@ -71,12 +72,38 @@ describe('DashboardPage', () => {
     expect(secondCallUrl).toContain('page=2')
   })
 
+  it('only offers the actions the backend lists in allowed_transitions', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [complaint({ status: 'open', allowed_transitions: ['in_progress', 'rejected'] })],
+          total: 1,
+          page: 1,
+          page_size: 20,
+        }),
+      ),
+    )
+
+    render(<DashboardPage />)
+
+    expect(await screen.findByRole('button', { name: /mark in progress/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reject/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /resolve/i })).not.toBeInTheDocument()
+  })
+
   it('renders the backend 409 message verbatim on an illegal transition', async () => {
     const user = userEvent.setup()
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        jsonResponse({ items: [complaint({ status: 'open' })], total: 1, page: 1, page_size: 20 }),
+        // Stale row: another operator already changed it, so the server rejects the click.
+        jsonResponse({
+          items: [complaint({ status: 'open', allowed_transitions: ['resolved'] })],
+          total: 1,
+          page: 1,
+          page_size: 20,
+        }),
       )
       .mockResolvedValueOnce(
         jsonResponse(
