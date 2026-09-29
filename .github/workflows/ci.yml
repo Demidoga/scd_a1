@@ -1,0 +1,297 @@
+name: CI
+
+# PR into main / push to dev = the "before you merge" gate. Never publishes
+# or deploys anything (see docs/architecture/cicd.md). Also callable as a
+# reusable workflow so cd.yml's `test` job re-runs the exact same gate
+# against merged `main` instead of duplicating the steps.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [dev]
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint-and-type:
+    name: Lint & type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.x"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Backend — ruff
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: Backend — mypy
+        working-directory: backend
+        run: uv run mypy app
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend — lint (oxlint)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Frontend — type check
+        working-directory: frontend
+        run: npx tsc -b
+
+  test-backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: civicpulse
+          POSTGRES_PASSWORD: civicpulse
+          POSTGRES_DB: civicpulse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U civicpulse -d civicpulse_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TRIAGE_PROVIDER: simulated
+      DATABASE_URL: postgresql+psycopg://civicpulse:civicpulse@localhost:5432/civicpulse_test
+      REDIS_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.x"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: pytest (coverage gate >= 65%)
+        working-directory: backend
+        run: uv run pytest tests/ --cov=app --cov-report=term-missing --cov-report=xml -q
+
+  test-frontend:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Vitest component tests
+        working-directory: frontend
+        run: npm run test
+
+  build:
+    name: Build images
+    needs: [lint-and-type, test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          tags: civicpulse-backend:dev
+          push: false
+          load: true
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          tags: civicpulse-frontend:dev
+          push: false
+          load: true
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Save images for downstream jobs
+        run: |
+          mkdir -p /tmp/images
+          docker save civicpulse-backend:dev -o /tmp/images/backend.tar
+          docker save civicpulse-frontend:dev -o /tmp/images/frontend.tar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: /tmp/images/*.tar
+          retention-days: 1
+
+  scan:
+    name: Trivy vulnerability scan
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: /tmp/images
+
+      - name: Load images
+        run: |
+          docker load -i /tmp/images/backend.tar
+          docker load -i /tmp/images/frontend.tar
+
+      # --ignore-unfixed: fail only on HIGH/CRITICAL findings that have a
+      # fixed version available — matches the assignment's exact gate
+      # (docs/architecture/cicd.md §2 Security scan).
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: civicpulse-backend:dev
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: civicpulse-frontend:dev
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  manifests:
+    name: Validate Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.x"
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      # Same script used locally (docs/architecture/kubernetes.md §14):
+      # renders base + each overlay with `kubectl kustomize`, validates with
+      # kubeconform -strict, then runs the invariants checklist as code.
+      - name: kustomize build | kubeconform -strict
+        run: scripts/k8s/validate-manifests.sh
+
+  integration:
+    name: Compose integration smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: /tmp/images
+
+      - name: Load images (tags match compose.yaml, so compose reuses them)
+        run: |
+          docker load -i /tmp/images/backend.tar
+          docker load -i /tmp/images/frontend.tar
+
+      - name: Start stack
+        run: |
+          cp .env.example .env
+          docker compose up -d
+
+      - name: Wait for /ready
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/ready >/dev/null; then
+              echo "backend ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "backend never became ready" >&2
+          docker compose logs --tail=200
+          exit 1
+
+      - name: POST/GET complaint + stats cache MISS->HIT
+        run: |
+          set -euo pipefail
+
+          create_resp="$(curl -sS -X POST http://localhost:8000/api/complaints \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Street light outside the school has been broken for a week","location":"Main Boulevard, Gulberg"}')"
+          echo "create: $create_resp"
+
+          id="$(printf '%s' "$create_resp" | grep -oE '"id" *: *"[0-9a-f-]{36}"' | head -n1 | grep -oE '[0-9a-f-]{36}')"
+          [[ -n "$id" ]] || { echo "no id in create response" >&2; exit 1; }
+
+          category="$(printf '%s' "$create_resp" | grep -oE '"category" *: *"[a-z_]+"')"
+          [[ -n "$category" ]] || { echo "no category in create response" >&2; exit 1; }
+          echo "category: $category"
+
+          get_status="$(curl -sS -o /tmp/get_resp.json -w '%{http_code}' http://localhost:8000/api/complaints/$id)"
+          [[ "$get_status" == "200" ]] || { echo "GET complaint returned $get_status" >&2; cat /tmp/get_resp.json; exit 1; }
+          echo "GET complaint: 200"
+
+          cache1="$(curl -sS -D - -o /dev/null http://localhost:8000/api/stats | grep -i '^x-cache:' | tr -d '\r')"
+          echo "stats #1: $cache1"
+          grep -qi 'MISS' <<<"$cache1" || echo "warning: expected MISS on the first stats read (cache may have been warm)"
+
+          cache2="$(curl -sS -D - -o /dev/null http://localhost:8000/api/stats | grep -i '^x-cache:' | tr -d '\r')"
+          echo "stats #2: $cache2"
+          grep -qi 'HIT' <<<"$cache2" || { echo "expected X-Cache: HIT on the second stats read" >&2; exit 1; }
+
+      - name: Stack logs (on failure)
+        if: failure()
+        run: docker compose logs --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
