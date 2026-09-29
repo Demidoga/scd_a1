@@ -188,12 +188,20 @@ jobs:
           curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"             | sudo tar -xz -C /usr/local/bin trivy
           trivy --version
 
+      # The default DB host (ghcr.io) rate-limits anonymous CI pulls
+      # (TOOMANYREQUESTS); the ECR Public mirror carries the same DB.
       - name: Scan backend image
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
         run: >
           trivy image --severity HIGH,CRITICAL --ignore-unfixed
           --exit-code 1 civicpulse-backend:dev
 
       - name: Scan frontend image
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
         run: >
           trivy image --severity HIGH,CRITICAL --ignore-unfixed
           --exit-code 1 civicpulse-frontend:dev
