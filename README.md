@@ -166,6 +166,49 @@ Static check of the manifests (no cluster needed; needs `kubectl` and
 `kubeconform`): `scripts/k8s/validate-manifests.sh`. Design and the reasons
 behind each choice: `docs/architecture/kubernetes.md`.
 
+### Autoscaling (HPA/VPA) & load testing
+
+`k8s/base/hpa.yaml` scales `backend` 2–10 replicas on 60% CPU utilization;
+`k8s/base/vpa.yaml` runs the VPA in recommender-only mode (`updateMode: "Off"`
+— it never evicts a pod itself). Needs Metrics Server (k3d ships it already),
+the VPA CRDs (not bundled by k3d — e.g.
+`helm install vpa cowboysysop/vertical-pod-autoscaler -n kube-system`), and
+[`k6`](https://k6.io) on the cluster/host before `deploy.sh` and the load
+test will work. On Windows, `winget install GrafanaLabs.k6`'s MSI can fail
+silently in a non-interactive shell (exit 1602, "You cancelled the
+installation") — the portable `k6-*-windows-amd64.zip` from the
+[GitHub releases page](https://github.com/grafana/k6/releases) works without
+that installer.
+
+```bash
+# The backend rate-limits POST /api/complaints at 10 req/60s per client IP,
+# and every request through the k3d Ingress shares one source IP — raise it
+# before load testing or k6 hits 429s in the first few seconds:
+kubectl patch configmap civicpulse-config -n civicpulse --type merge \
+  -p '{"data":{"RATE_LIMIT_REQUESTS":"100000"}}'
+kubectl rollout restart deployment/backend -n civicpulse
+
+kubectl get hpa backend -n civicpulse -w   # separate terminal
+k6 run load/k6-script.js                   # ramps 5-50 VUs against /api/stats,
+                                            # /api/complaints (GET+POST)
+
+kubectl describe vpa backend-vpa -n civicpulse   # Target/Lower/Upper Bound recommendations
+
+# revert once done:
+kubectl patch configmap civicpulse-config -n civicpulse --type merge \
+  -p '{"data":{"RATE_LIMIT_REQUESTS":"10"}}'
+```
+
+Status: verified live on a local k3d cluster — HPA scaled 2→10 replicas
+under k6 load, VPA produced a Target recommendation that
+`resources.requests` was then updated to match, a re-run at the new size
+topped out at 9/10 instead of pinning CPU above 100% at max replicas, and a
+`kubectl set image` rollout under load completed with 0% failed requests.
+Replicas-vs-load charts: `load/results/hpa-run1-replicas-vs-load.png` /
+`hpa-run2-replicas-vs-load.png`. Full data and analysis (including measured
+HPA lag numbers for engineering-notes Q5) in `docs/ENGINEERING-NOTES.md`
+Milestone 8; `docs/progress.md` has the summary.
+
 ## More
 
 Full docs, architecture, and milestone checklist live in `docs/` — see

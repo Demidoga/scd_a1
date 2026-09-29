@@ -138,7 +138,68 @@ probes: startup+liveness `/health`, readiness `/ready`; `maxSurge: 1` /
 - Repo-root `.env` did not exist (only `backend/.env`), so `create-secrets.sh` stopped; created it from `.env.example` (gitignored, dev-default password).
 - The k3d node could not pull from Docker Hub on this machine → optional `scripts/k8s/load-base-images.sh`.
 
-**Not done (Milestone 8 / by design):** formal zero-downtime evidence under k6 load, HPA/VPA, `prod` overlay applied to a cluster (only rendered/validated; its GHCR images don't exist until Milestone 9), `runAsNonRoot`.
+**Not done in Milestone 7 (moved to Milestone 8, now done there):** formal
+zero-downtime evidence under k6 load, HPA/VPA. `prod` overlay applied to a
+cluster is still only rendered/validated (its GHCR images don't exist until
+Milestone 9); `runAsNonRoot` is still not set.
+
+**Milestone 8 — HPA, VPA & Operational Testing. Done — including live-cluster evidence.**
+`k8s/base/hpa.yaml` (`autoscaling/v2`, 2–10 replicas, CPU 60%,
+`scaleUp.stabilizationWindowSeconds: 0` / `scaleDown: 300`) and
+`k8s/base/vpa.yaml` (`updateMode: "Off"`) added to the base kustomization.
+`backend.yaml`'s `replicas: 2` removed (the HPA owns replica count now);
+`check_manifest_invariants.py::check_backend` updated to assert the
+Deployment carries no `replicas` field and that `HorizontalPodAutoscaler/backend`
+exists with `minReplicas >= 2`; `validate-manifests.sh` passes
+`-ignore-missing-schemas` to kubeconform (no schema exists for the VPA CRD).
+`load/k6-script.js` ramps GET `/api/stats` + `/api/complaints` traffic 5→50
+VUs plus a steady low-rate `POST /api/complaints` scenario, with
+`error rate < 1%` / `p95 < 500ms` thresholds. Tooling installed this session:
+`k3d` (winget), `helm` (winget), `k6` (portable binary — the winget MSI
+failed silently under this sandbox's non-interactive install, see
+`docs/ENGINEERING-NOTES.md`), VPA CRDs + controllers via the
+`cowboysysop/vertical-pod-autoscaler` Helm chart into `kube-system`.
+
+**Verified live on a local k3d cluster (k3d v5.9.0, k3s v1.35.5):**
+- `scripts/k8s/create-secrets.sh` had a Windows bug (`--from-env-file=<(...)`
+  process substitution — `kubectl.exe` can't read Git Bash's `/proc/self/fd/N`
+  path) fixed to use a real temp file. Confirmed working.
+- Full `deploy.sh dev` including `hpa.yaml`/`vpa.yaml` against a live
+  metrics-server + VPA install: `smoke-test.sh` green.
+- **Run 1** (original guessed requests, `cpu: 100m`): k6 ramp to 50 VUs drove
+  the HPA through its full range, `SuccessfulRescale` events captured —
+  2→5→7→10 replicas, CPU pinned 130-248%/60% even at `maxReplicas` (the
+  original request was too small a denominator — the fleet's real-CPU
+  ceiling at 10 pods was only 1 core). Scale-down 10→6→2 measured 296s after
+  the last above-target reading, matching the configured 300s
+  `scaleDown.stabilizationWindowSeconds` almost exactly.
+- **VPA recommendation** captured after Run 1: Target `cpu: 296m,
+  memory: 250Mi` (`kubectl describe vpa backend-vpa`).
+  `k8s/base/backend.yaml`'s `resources.requests` updated to `300m/256Mi`
+  (`limits` to `750m/384Mi`) to match, redeployed.
+- **Run 2** (resized requests): same k6 script, HPA topped out at 9/10
+  (never hit max) with CPU settling to 30-50%/60% instead of pinning above
+  100% — direct evidence the resize fixed the fleet's real capacity ceiling,
+  not just the HPA's math.
+- **Zero-downtime rolling update under load:** `kubectl set image` on all 10
+  replicas mid-k6-run (05:33:14Z→05:34:40Z, ~86s) — 0.00% `http_req_failed`
+  across 36,294 requests during that run.
+- Replicas-vs-load charts rendered from the raw `kubectl get hpa` captures:
+  `load/results/hpa-run1-replicas-vs-load.png`,
+  `load/results/hpa-run2-replicas-vs-load.png`.
+- Full data/analysis, plus a discovered gotcha (redeploying resets an
+  imperative `kubectl patch configmap` rate-limit bump, since the committed
+  ConfigMap still has the real default — this caused Run 2's one non-zero
+  error rate, on the rate-limited POST path only, unrelated to HPA/VPA
+  behavior), are in `docs/ENGINEERING-NOTES.md` Milestone 8, including Q5
+  (measured HPA lag, not a placeholder) and Q6 (VPA `Off` mode) with real
+  numbers cited throughout.
+
+**Not done (by design / out of scope):** `prod` overlay HPA/VPA behavior on
+a real cluster (same GHCR-image blocker as Milestone 7); a second, cleaner
+Run 2 with the rate limit correctly re-bumped (not worth re-running — the
+0.64% failures were isolated to the rate-limited write scenario and didn't
+affect the CPU signal the HPA/VPA comparison depends on).
 
 ## Known, deliberate gaps (not oversights)
 
@@ -163,12 +224,9 @@ probes: startup+liveness `/health`, readiness `/ready`; `maxSurge: 1` /
 
 ## Next
 
-**Milestone 8 — HPA, VPA & operational testing.** Not started. Handoffs from
-M7: remove `replicas: 2` from the backend Deployment when the HPA is added;
-VPA needs its CRDs installed before `vpa.yaml` can be applied (k3s already
-bundles metrics-server); k6 must avoid `POST /api/complaints` or raise
-`RATE_LIMIT_REQUESTS` because of the 10 req/60s/IP limiter.
+**Milestone 9 — CI/CD & Security Gates.** Not started. Milestone 8 is done,
+including live-cluster evidence (see above).
 
-After that, in order: 9 (CI/CD), 10 (docs/evidence/hardening). See
+After that: 10 (docs/evidence/hardening). See
 `docs/architecture/roadmap.md` and `docs/Milestones.md` for the full
 dependency chain.
