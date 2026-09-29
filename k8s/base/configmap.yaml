@@ -12,7 +12,7 @@ metadata:
     app.kubernetes.io/part-of: civicpulse
 data:
   # Overridden per overlay (dev=simulated, prod=llm).
-  TRIAGE_PROVIDER: "simulated"
+  TRIAGE_PROVIDER: "llm"
   LLM_MODEL: "openai/gpt-oss-20b"
 
   # Database — the password is NOT here, it comes from the Secret.

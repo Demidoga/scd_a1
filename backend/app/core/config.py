@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Triage provider selection
-    triage_provider: Literal["llm", "rules", "simulated"] = "simulated"
+    triage_provider: Literal["llm", "rules", "simulated"] = "llm"
     llm_api_key: str = ""
     llm_model: str = "openai/gpt-oss-20b"
 

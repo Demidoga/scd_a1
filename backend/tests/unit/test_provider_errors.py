@@ -4,6 +4,7 @@ import pytest
 
 from app.providers.triage.errors import (
     TriageBadRequestError,
+    TriageConnectionError,
     TriageMalformedOutputError,
     TriageRateLimitError,
     TriageServerError,
@@ -11,7 +12,10 @@ from app.providers.triage.errors import (
 )
 
 
-@pytest.mark.parametrize("error_cls", [TriageTimeoutError, TriageRateLimitError, TriageServerError])
+@pytest.mark.parametrize(
+    "error_cls",
+    [TriageTimeoutError, TriageRateLimitError, TriageServerError, TriageConnectionError],
+)
 def test_retryable_errors(error_cls: type[Exception]) -> None:
     assert error_cls("x").retryable is True
 

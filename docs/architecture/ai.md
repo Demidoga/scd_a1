@@ -30,6 +30,11 @@ Provider selection comes from `TRIAGE_PROVIDER`. Allowed values: `llm` | `rules`
 | `RuleBasedTriage` | `rules` | deterministic fallback | none | deterministic |
 | `SimulatedTriage` | `simulated` | CI/testing | none | deterministic |
 
+**Default is `llm` (AI first).** Every environment defaults to `TRIAGE_PROVIDER=llm`; only CI (and the pytest suite) pins `simulated`. The AI API is always tried first and `RuleBasedTriage` is the safety net:
+
+- Groq times out, is unreachable (DNS/connection error), returns 429/5xx/400/other, or returns output that fails `TriageResult` validation → `rules:fallback`.
+- `TRIAGE_PROVIDER=llm` but `LLM_API_KEY` is empty → the backend still starts, logs `llm_api_key_missing_using_rules`, and every complaint is triaged by `rules`.
+
 ## 2. AI result model
 
 ```python

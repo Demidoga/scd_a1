@@ -23,6 +23,7 @@ from app.domain.enums import Category, Priority
 from app.domain.triage import TriageResult
 from app.providers.triage.errors import (
     TriageBadRequestError,
+    TriageConnectionError,
     TriageMalformedOutputError,
     TriageRateLimitError,
     TriageServerError,
@@ -86,6 +87,8 @@ class LLMTriage:
             )
         except httpx.TimeoutException as exc:
             raise TriageTimeoutError("Groq request timed out") from exc
+        except httpx.TransportError as exc:
+            raise TriageConnectionError(f"Groq unreachable: {type(exc).__name__}") from exc
 
         if response.status_code == 429:
             raise TriageRateLimitError("Groq rate limit exceeded")

@@ -80,7 +80,7 @@ services:
     restart: unless-stopped
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     environment:
-      TRIAGE_PROVIDER: ${TRIAGE_PROVIDER:-simulated}
+      TRIAGE_PROVIDER: ${TRIAGE_PROVIDER:-llm}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-openai/gpt-oss-20b}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}

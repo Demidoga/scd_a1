@@ -9,7 +9,7 @@
 # never printed.
 #
 # Reads from .env:   POSTGRES_PASSWORD  (required)
-#                    LLM_API_KEY        (optional — only needed for TRIAGE_PROVIDER=llm)
+#                    LLM_API_KEY        (optional — without it triage falls back to rules)
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
@@ -55,7 +55,7 @@ kubectl create secret generic "$SECRET_NAME" \
 rm -f "$env_tmp"
 
 if [[ -z "$llm_api_key" ]]; then
-  echo "Note: LLM_API_KEY is empty — fine for TRIAGE_PROVIDER=simulated/rules (the dev overlay)."
+  echo "Note: LLM_API_KEY is empty — triage will use the rule-based fallback until you set it."
 fi
 echo
 echo "Pods read Secrets at start-up. If the backend/postgres pods are already"

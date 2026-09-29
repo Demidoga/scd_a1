@@ -9,6 +9,7 @@ import pytest
 
 from app.providers.triage.errors import (
     TriageBadRequestError,
+    TriageConnectionError,
     TriageMalformedOutputError,
     TriageRateLimitError,
     TriageServerError,
@@ -81,6 +82,15 @@ def test_timeout_raises_triage_timeout_error() -> None:
 
     provider = LLMTriage(api_key="test-key", model="test-model", client=_client_with(handler))
     with pytest.raises(TriageTimeoutError):
+        provider.triage("Water pipe burst", "Street 1")
+
+
+def test_connection_failure_raises_triage_connection_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("name resolution failed", request=request)
+
+    provider = LLMTriage(api_key="test-key", model="test-model", client=_client_with(handler))
+    with pytest.raises(TriageConnectionError):
         provider.triage("Water pipe burst", "Street 1")
 
 

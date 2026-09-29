@@ -15,6 +15,12 @@ class TriageTimeoutError(TriageProviderError):
     retryable = True
 
 
+class TriageConnectionError(TriageProviderError):
+    """Could not reach the provider at all (DNS failure, refused/reset connection)."""
+
+    retryable = True
+
+
 class TriageRateLimitError(TriageProviderError):
     """HTTP 429 from the provider."""
 

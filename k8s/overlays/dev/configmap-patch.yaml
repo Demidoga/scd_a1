@@ -1,9 +1,9 @@
-# Dev uses the deterministic simulated triage provider: no API key, no
-# network calls, repeatable results.
+# Dev also tries the hosted AI (Groq) first. With no LLM_API_KEY in the Secret,
+# or if Groq fails, triage falls back to the rule-based provider — never a 500.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: civicpulse-config
   namespace: civicpulse
 data:
-  TRIAGE_PROVIDER: "simulated"
+  TRIAGE_PROVIDER: "llm"

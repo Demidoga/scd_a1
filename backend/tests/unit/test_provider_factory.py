@@ -4,6 +4,7 @@ import pytest
 
 from app.core.config import Settings
 from app.providers.triage.factory import UnknownTriageProviderError, create_triage_provider
+from app.providers.triage.llm import LLMTriage
 from app.providers.triage.rules import RuleBasedTriage
 from app.providers.triage.simulated import SimulatedTriage
 
@@ -22,9 +23,14 @@ def test_simulated_provider_selected() -> None:
     assert isinstance(provider, SimulatedTriage)
 
 
-def test_llm_provider_requires_api_key() -> None:
-    with pytest.raises(ValueError, match="LLM_API_KEY"):
-        create_triage_provider(_settings(triage_provider="llm", llm_api_key=""))
+def test_llm_provider_selected_when_key_present() -> None:
+    provider = create_triage_provider(_settings(triage_provider="llm", llm_api_key="k"))
+    assert isinstance(provider, LLMTriage)
+
+
+def test_llm_without_api_key_degrades_to_rules_instead_of_crashing() -> None:
+    provider = create_triage_provider(_settings(triage_provider="llm", llm_api_key=""))
+    assert isinstance(provider, RuleBasedTriage)
 
 
 def test_unknown_provider_rejected() -> None:
