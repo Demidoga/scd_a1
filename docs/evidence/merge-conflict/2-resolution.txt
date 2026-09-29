@@ -1,0 +1,18 @@
+$ git show --format='%h %s' -m --first-parent ec4dd89 -- backend/app/services/triage.py   # resolution vs. the 'wider' side
+ec4dd89 Merge branch 'feature/retry-jitter-shorter' into feature/retry-jitter-wider
+
+diff --git a/backend/app/services/triage.py b/backend/app/services/triage.py
+index 60af181..ec5b1e8 100644
+--- a/backend/app/services/triage.py
++++ b/backend/app/services/triage.py
+@@ -20,6 +20,10 @@ from app.providers.triage.rules import RuleBasedTriage
+ 
+ logger = get_logger(__name__)
+ 
++# The backend runs up to 10 pods (HPA) sharing one LLM quota, so a 429 hits
++# many pods at the same instant. A wide window spreads their single retry out
++# instead of sending them back together; the extra delay only applies to a
++# request that has already failed once.
+ _RETRY_JITTER_MIN_SECONDS = 0.5
+ _RETRY_JITTER_MAX_SECONDS = 1.5
+ 

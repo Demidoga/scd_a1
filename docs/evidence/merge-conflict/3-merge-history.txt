@@ -1,0 +1,9 @@
+$ git log --graph --oneline -6 feature/retry-jitter-wider
+*   ec4dd89 Merge branch 'feature/retry-jitter-shorter' into feature/retry-jitter-wider
+|\  
+| * 11672f1 perf: shorten LLM retry jitter to 0.1-0.3s so users wait less
+* | 6cd60b3 fix: widen LLM retry jitter to 0.5-1.5s to spread retries across pods
+|/  
+* 25b3ddd ci: install VPA CRDs in the ephemeral CD cluster
+* 37e9ef7 ci: run CD on pushes to dev as well as main
+* 975eaaa ci: re-run pipeline

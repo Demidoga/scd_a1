@@ -1,0 +1,25 @@
+$ git merge feature/retry-jitter-shorter   # run on feature/retry-jitter-wider
+Auto-merging backend/app/services/triage.py
+CONFLICT (content): Merge conflict in backend/app/services/triage.py
+Automatic merge failed; fix conflicts and then commit the result.
+
+$ git status --short
+UU backend/app/services/triage.py
+
+$ sed -n 20,35p backend/app/services/triage.py   # conflict markers
+
+logger = get_logger(__name__)
+
+<<<<<<< HEAD
+_RETRY_JITTER_MIN_SECONDS = 0.5
+_RETRY_JITTER_MAX_SECONDS = 1.5
+=======
+_RETRY_JITTER_MIN_SECONDS = 0.1
+_RETRY_JITTER_MAX_SECONDS = 0.3
+>>>>>>> feature/retry-jitter-shorter
+
+
+@dataclass(frozen=True)
+class TriageExecution:
+    result: TriageResult
+    triaged_by: str
