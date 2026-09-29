@@ -99,8 +99,13 @@ def check_backend(by_kind, errors):
         errors.append("Deployment/backend is missing")
         return
     spec = backend["spec"]
-    if spec.get("replicas", 1) < 2:
-        errors.append("backend replicas must be >= 2")
+    if "replicas" in spec:
+        errors.append("backend Deployment must not set replicas: the HPA owns replica count")
+    hpa = by_kind["HorizontalPodAutoscaler"].get("backend")
+    if hpa is None:
+        errors.append("HorizontalPodAutoscaler/backend is missing")
+    elif hpa["spec"].get("minReplicas", 0) < 2:
+        errors.append("backend HPA minReplicas must be >= 2")
     rolling = spec.get("strategy", {}).get("rollingUpdate", {})
     if rolling.get("maxSurge") != 1 or rolling.get("maxUnavailable") != 0:
         errors.append("backend rollingUpdate must be maxSurge: 1, maxUnavailable: 0")

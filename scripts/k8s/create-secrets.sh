@@ -43,10 +43,16 @@ log "Ensuring namespace '$NAMESPACE' exists"
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
 log "Creating/updating Secret '$SECRET_NAME' (values not shown)"
+# A real temp file, not process substitution: on Windows, kubectl is a native
+# binary and can't read the /proc/self/fd/N path Git Bash's <(...) produces.
+env_tmp="$(mktemp)"
+trap 'rm -f "$env_tmp"' EXIT
+printf 'POSTGRES_PASSWORD=%s\nLLM_API_KEY=%s\n' "$postgres_password" "$llm_api_key" >"$env_tmp"
 kubectl create secret generic "$SECRET_NAME" \
   --namespace "$NAMESPACE" \
-  --from-env-file=<(printf 'POSTGRES_PASSWORD=%s\nLLM_API_KEY=%s\n' "$postgres_password" "$llm_api_key") \
+  --from-env-file="$env_tmp" \
   --dry-run=client -o yaml | kubectl apply -f -
+rm -f "$env_tmp"
 
 if [[ -z "$llm_api_key" ]]; then
   echo "Note: LLM_API_KEY is empty — fine for TRIAGE_PROVIDER=simulated/rules (the dev overlay)."

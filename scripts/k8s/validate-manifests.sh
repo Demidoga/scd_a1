@@ -20,7 +20,10 @@ validate() {
   local name="$1" dir="$2" mode="$3" rendered
   log "Validating $name"
   rendered="$(kubectl kustomize "$dir")"
-  kubeconform -strict -summary -kubernetes-version "$K8S_SCHEMA_VERSION" <<<"$rendered"
+  # -ignore-missing-schemas: kubeconform ships no schema for the VPA CRD
+  # (autoscaling.k8s.io/v1 VerticalPodAutoscaler, Milestone 8) since it isn't
+  # a built-in Kubernetes API — everything else still validates -strict.
+  kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version "$K8S_SCHEMA_VERSION" <<<"$rendered"
   uv run --quiet --with pyyaml python "$SCRIPT_DIR/check_manifest_invariants.py" "$mode" <<<"$rendered"
 }
 
