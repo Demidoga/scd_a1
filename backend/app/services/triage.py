@@ -20,8 +20,8 @@ from app.providers.triage.rules import RuleBasedTriage
 
 logger = get_logger(__name__)
 
-_RETRY_JITTER_MIN_SECONDS = 0.2
-_RETRY_JITTER_MAX_SECONDS = 0.6
+_RETRY_JITTER_MIN_SECONDS = 0.5
+_RETRY_JITTER_MAX_SECONDS = 1.5
 
 
 @dataclass(frozen=True)
