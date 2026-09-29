@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Git repo (`main`/`dev`, remote `Demidoga/scd_a1`). **Milestones 1–6 are implemented**: `backend/` has the full four-layer backend (routes/services/repositories/providers), PostgreSQL schema via Alembic, the 3-provider AI triage pipeline, Redis caching/rate-limiting, and 112 passing tests at 94.5% coverage; `frontend/` has the React 18 + Vite + TypeScript + Tailwind app (submit/dashboard/stats views, typed API client, runtime-configured via same-origin `/api`, 8 Vitest component tests); the whole system is containerized (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`, `compose.yaml`/`compose.prod.yaml`, `edge`/`internal` networks, `migrate` service, `pgdata`/`redisdata` volumes) and verified end-to-end with Docker Desktop. **Milestone 7 (Kubernetes baseline)** is implemented as Kustomize manifests (`k8s/base`, `k8s/components`, `k8s/overlays/{dev,prod}`) plus `scripts/k8s/`, statically validated and verified live on a local k3d cluster (deploy, Ingress, probes, Postgres persistence — see `docs/progress.md`). HPA/VPA/load testing and CI don't exist yet — that's Milestones 8–9. See `docs/progress.md` for the current, maintained snapshot of what's done/next; don't rely on this paragraph's specifics staying current, only `docs/progress.md`. When continuing implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec, not background reading.
+Git repo (`main`/`dev`, remote `Demidoga/scd_a1`). **Milestones 1–9 are implemented**: `backend/` has the full four-layer backend (routes/services/repositories/providers), PostgreSQL schema via Alembic, the 3-provider AI triage pipeline, Redis caching/rate-limiting, and 118 passing tests at ~98% coverage; `frontend/` has the React 18 + Vite + TypeScript + Tailwind app (submit/dashboard/stats views, typed API client, runtime-configured via same-origin `/api`, 9 Vitest component tests); the whole system is containerized (`backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`, `compose.yaml`/`compose.prod.yaml`, `edge`/`internal` networks, `migrate` service, `pgdata`/`redisdata` volumes). **Kubernetes** is Kustomize manifests (`k8s/base`, `k8s/components`, `k8s/overlays/{dev,prod}`) plus `scripts/k8s/`, with an HPA (2–10 replicas, 60% CPU) and a recommender-only VPA, verified live on a local k3d cluster including k6 load tests and a zero-downtime rolling update (evidence in `load/results/`). **CI/CD** is `.github/workflows/{ci,cd,release}.yml` (CI gates PRs; CD builds SHA-tagged images to GHCR and deploys to an ephemeral k3d; release gates on the same CI). **Milestone 10 (docs/evidence/hardening) is in progress**: `docs/RUNBOOK.md`, `docs/AI-USAGE.md` (has sections the authors must complete), `scripts/check_submission.py`, and engineering-note answers Q1–Q8 exist; remaining work is manual evidence (branch protection, red→green CI, rollback demo, screenshots, demo video). See `docs/progress.md` for the current, maintained snapshot of what's done/next and `docs/Todo.md` for the graded checklist; don't rely on this paragraph's specifics staying current. When continuing implementation, follow the architecture and milestone order below rather than inventing a different structure — the docs are a binding spec, not background reading.
 
 ## What CivicPulse is
 
@@ -103,7 +103,7 @@ Full annotated version: `docs/architecture/repository-layout.md`.
 
 ## Commands
 
-Backend, frontend, and Docker Compose commands below are runnable today (Milestones 1–6 done; backend via `uv`, frontend via `npm`; see `README.md` for full local setup including the one-time Postgres role/DB creation). Kubernetes commands below are runnable for Milestone 7 (the manifests and `scripts/k8s/*`); HPA/VPA/load-test/CI commands remain aspirational until Milestones 8–9 land.
+All commands below are runnable today (backend via `uv`, frontend via `npm`; see `README.md` for full local setup including the one-time Postgres role/DB creation). Kubernetes commands use the manifests and `scripts/k8s/*`; HPA/VPA need Metrics Server and the VPA CRDs (README, Autoscaling section).
 
 - Backend lint/type: `uv run ruff check .`, `uv run mypy app` (run from `backend/`)
 - Backend tests: `uv run pytest tests/unit -q` (no DB needed) or `uv run pytest tests/ --cov=app --cov-report=term-missing -q` (full suite, needs local `civicpulse_test` Postgres + Redis db 15); CI/dev default `TRIAGE_PROVIDER=simulated`; coverage gate is ≥65% on `app/` (currently ~94.5%)
@@ -116,8 +116,8 @@ Backend, frontend, and Docker Compose commands below are runnable today (Milesto
 - Local stack: `docker compose up --build` (dev, hot-reload), `IMAGE_TAG=<sha> docker compose -f compose.prod.yaml up -d` (prod-shaped, pre-built images only)
 - K8s manifest validation (no cluster needed; needs `kubectl`, `kubeconform`, `uv`): `scripts/k8s/validate-manifests.sh`
 - K8s local deploy (needs Docker + `k3d` + `kubectl`): `scripts/k8s/create-cluster.sh` → `load-images.sh` → `create-secrets.sh` → `deploy.sh dev` → `smoke-test.sh` / `verify-persistence.sh`; `DRY_RUN=1 scripts/k8s/deploy.sh dev <tag>` just renders the manifests
-- Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w` — not yet written
-- Pre-submission check: `python scripts/check_submission.py` — not yet written
+- Load testing: `k6 run load/k6-script.js`, watch scaling with `kubectl get hpa -w` (raise `RATE_LIMIT_REQUESTS` first — see README)
+- Pre-submission check: `python scripts/check_submission.py` (lint for the assignment's automatic deductions; exit 1 on any FAIL)
 
 ## Build order
 

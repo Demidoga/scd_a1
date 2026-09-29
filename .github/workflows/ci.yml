@@ -130,7 +130,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build backend image
         uses: docker/build-push-action@v6
@@ -272,7 +272,13 @@ jobs:
           docker load -i /tmp/images/backend.tar
           docker load -i /tmp/images/frontend.tar
 
+      # .env.example defaults to TRIAGE_PROVIDER=llm (Groq, then rules). CI must
+      # be deterministic and must never spend the shared LLM quota, so the
+      # shell variable below overrides .env for this job only.
       - name: Start stack
+        env:
+          TRIAGE_PROVIDER: simulated
+          LLM_API_KEY: ""
         run: |
           cp .env.example .env
           docker compose up -d
@@ -304,14 +310,20 @@ jobs:
           category="$(printf '%s' "$create_resp" | grep -oE '"category" *: *"[a-z_]+"')"
           [[ -n "$category" ]] || { echo "no category in create response" >&2; exit 1; }
           echo "category: $category"
+          # The compose stack runs SimulatedTriage (deterministic keyword rules),
+          # so the category for this exact text is a fixed value we can assert.
+          [[ "$category" == *'"streetlights"'* ]] || { echo "expected category streetlights, got: $category" >&2; exit 1; }
 
           get_status="$(curl -sS -o /tmp/get_resp.json -w '%{http_code}' http://localhost:8000/api/complaints/$id)"
           [[ "$get_status" == "200" ]] || { echo "GET complaint returned $get_status" >&2; cat /tmp/get_resp.json; exit 1; }
           echo "GET complaint: 200"
+          get_category="$(grep -oE '"category" *: *"[a-z_]+"' /tmp/get_resp.json)"
+          [[ "$get_category" == *'"streetlights"'* ]] || { echo "GET returned category: $get_category" >&2; exit 1; }
 
           cache1="$(curl -sS -D - -o /dev/null http://localhost:8000/api/stats | grep -i '^x-cache:' | tr -d '\r')"
           echo "stats #1: $cache1"
-          grep -qi 'MISS' <<<"$cache1" || echo "warning: expected MISS on the first stats read (cache may have been warm)"
+          # The POST above invalidates the stats cache, so this read must be a MISS.
+          grep -qi 'MISS' <<<"$cache1" || { echo "expected X-Cache: MISS on the first stats read" >&2; exit 1; }
 
           cache2="$(curl -sS -D - -o /dev/null http://localhost:8000/api/stats | grep -i '^x-cache:' | tr -d '\r')"
           echo "stats #2: $cache2"

@@ -252,6 +252,13 @@ Run 2 with the rate limit correctly re-bumped (not worth re-running — the
 0.64% failures were isolated to the rate-limited write scenario and didn't
 affect the CPU signal the HPA/VPA comparison depends on).
 
+**Milestone 9 — CI/CD & Security Gates. Workflows written; live results not verified from this sandbox.**
+`.github/workflows/ci.yml` (PR to `main` and push to `dev`: `lint-and-type`, `test-backend` with Postgres 16/Redis 7 service containers and `TRIAGE_PROVIDER=simulated`, `test-frontend`, `build` (no push), Trivy `scan` with `--ignore-unfixed` on HIGH/CRITICAL, `manifests` via `scripts/k8s/validate-manifests.sh`, Compose `integration` smoke test asserting the exact category and X-Cache MISS→HIT); `cd.yml` (`test` → `build-push` → `deploy-k8s`, each `needs:` the previous; GHCR images tagged by `github.sha` plus `latest`, Syft SBOMs, digests as outputs, ephemeral k3d cluster, `deploy.sh prod <sha>`, Ingress smoke test, `kubectl get hpa`); `release.yml` (tag `v*`, gated on the same CI via `workflow_call`, semver-tagged images, generated release notes). Least-privilege `permissions:` on each; all registry auth uses `GITHUB_TOKEN`; actions pinned `@v4`+ or a full version tag. Operational guide: `docs/CI-CD-SETUP.md`. **Not confirmed:** that the latest CI/CD runs are green, branch protection, and the repo secrets — GitHub-side, `gh` is not installed here. The two newest CD commits were crash fixes.
+
+**Milestone 10 audit pass (2026-09-29).** Todo re-audited against the rubric (`docs/Todo.md`). Fixed: `release.yml` had no `needs:` gate; several actions were below `@v4`; the CI integration job used the default `TRIAGE_PROVIDER=llm` instead of `simulated` and only warned on a missing cache MISS; frontend was on React 19 (now React 18.3.1; build, types and 9 tests pass); no seed idempotency test (`backend/tests/integration/test_seed.py`); duplicate git identities (`.mailmap`). Added: `docs/RUNBOOK.md`, `docs/AI-USAGE.md` (authors must complete marked sections), `scripts/check_submission.py`, `docs/evidence/README.md`, README problem statement/badges/Mermaid/API table/one-command quickstart, engineering-note answers Q1–Q4, Q7, Q8 (Q2 and Q8 are drafts to confirm). Test state: 118 backend tests at 98% coverage, 9 frontend tests.
+
+**Known gap found by the audit, not fixed:** the backend image installs dependencies with `pip install .` (`backend/Dockerfile:18-21`), not from `uv.lock`, so the shipped dependency set can differ from the tested one (Q1 in `docs/ENGINEERING-NOTES.md`).
+
 ## Known, deliberate gaps (not oversights)
 
 - **No Ollama.** Instructor-approved scope reduction — see ADR 0001 and
@@ -275,9 +282,4 @@ affect the CPU signal the HPA/VPA comparison depends on).
 
 ## Next
 
-**Milestone 9 — CI/CD & Security Gates.** Not started. Milestone 8 is done,
-including live-cluster evidence (see above).
-
-After that: 10 (docs/evidence/hardening). See
-`docs/architecture/roadmap.md` and `docs/Milestones.md` for the full
-dependency chain.
+**Milestone 10 — docs, evidence, hardening.** Remaining work is mostly manual and outside the repository: enable branch protection and add the repo secrets (`docs/CI-CD-SETUP.md`), do the deliberate failing PR (red then green) and the merge-conflict exercise using feature branches and PRs, record a green `cd.yml` run, demonstrate both rollbacks (`docs/RUNBOOK.md` §2), add README screenshots, record the demo video, and complete the `[AUTHORS TO COMPLETE]` sections of `docs/AI-USAGE.md`. Then run `python scripts/check_submission.py` and finish `docs/Todo.md` §25 and §29. See `docs/architecture/roadmap.md` for the dependency chain.

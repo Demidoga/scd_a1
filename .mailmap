@@ -1,0 +1,2 @@
+# Collapse duplicate git identities so `git shortlog -sn` shows one line per person.
+Asad Ahmed <asad.mlk00@gmail.com> asad <asad.mlk00@gmail.com>
