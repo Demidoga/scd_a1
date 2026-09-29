@@ -1,0 +1,167 @@
+name: CD
+
+# Push to main = build once, deploy many (docs/architecture/cicd.md §6).
+# Never triggered by a PR — main only moves via an already-CI-passed,
+# approved PR, so `test` here is a second, belt-and-braces run of the exact
+# same gate against the merged commit before anything is published.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    name: Full lint/test suite (merged main)
+    uses: ./.github/workflows/ci.yml
+
+  build-push:
+    name: Build, push, SBOM
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      image_repo: ${{ steps.repo.outputs.image_repo }}
+      backend_digest: ${{ steps.build-backend.outputs.digest }}
+      frontend_digest: ${{ steps.build-frontend.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase GHCR image repo
+        id: repo
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image_repo=ghcr.io/$owner" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `latest` is pushed for convenience only — it is never what gets
+      # deployed (see deploy-k8s below, which deploys by ${{ github.sha }}).
+      - name: Build & push backend
+        id: build-backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ steps.repo.outputs.image_repo }}/civicpulse-backend:${{ github.sha }}
+            ${{ steps.repo.outputs.image_repo }}/civicpulse-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build & push frontend
+        id: build-frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: |
+            ${{ steps.repo.outputs.image_repo }}/civicpulse-frontend:${{ github.sha }}
+            ${{ steps.repo.outputs.image_repo }}/civicpulse-frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Print image digests
+        run: |
+          echo "backend  @ ${{ steps.build-backend.outputs.digest }}"
+          echo "frontend @ ${{ steps.build-frontend.outputs.digest }}"
+
+      - name: SBOM — backend (Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.repo.outputs.image_repo }}/civicpulse-backend:${{ github.sha }}
+          format: spdx-json
+          artifact-name: backend-sbom.spdx.json
+
+      - name: SBOM — frontend (Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.repo.outputs.image_repo }}/civicpulse-frontend:${{ github.sha }}
+          format: spdx-json
+          artifact-name: frontend-sbom.spdx.json
+
+  deploy-k8s:
+    name: Migrate + deploy to ephemeral k3d
+    needs: build-push
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_REPO: ${{ needs.build-push.outputs.image_repo }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      # k3d ships Traefik (Ingress) + metrics-server out of the box — see
+      # docs/architecture/kubernetes.md §6. Port mapping matches
+      # scripts/k8s/_common.sh's INGRESS_URL default (localhost:8080).
+      - name: Create ephemeral k3d cluster
+        run: k3d cluster create civicpulse --port "8080:80@loadbalancer" --agents 0 --wait
+
+      - name: Create namespace
+        run: kubectl apply -f k8s/base/namespace.yaml
+
+      # GHCR packages pushed with GITHUB_TOKEN default to private, so the
+      # cluster needs a pull credential. Patching the default ServiceAccount
+      # applies it to every pod without touching the committed manifests.
+      - name: Grant the cluster a GHCR pull credential
+        run: |
+          kubectl create secret docker-registry ghcr-pull \
+            --namespace civicpulse \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl patch serviceaccount default -n civicpulse \
+            -p '{"imagePullSecrets": [{"name": "ghcr-pull"}]}'
+
+      # Real Secret from GitHub Secrets, not .env (docs/architecture/kubernetes.md §7).
+      # POSTGRES_PASSWORD is required; LLM_API_KEY is optional — its absence
+      # just means the triage pipeline falls back to the rule-based provider.
+      - name: Create application Secret
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          [[ -n "$POSTGRES_PASSWORD" ]] || { echo "::error::Repo secret POSTGRES_PASSWORD is not set" >&2; exit 1; }
+          env_tmp="$(mktemp)"
+          printf 'POSTGRES_PASSWORD=%s\nLLM_API_KEY=%s\n' "$POSTGRES_PASSWORD" "$LLM_API_KEY" > "$env_tmp"
+          kubectl create secret generic civicpulse-secrets \
+            --namespace civicpulse \
+            --from-env-file="$env_tmp" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          rm -f "$env_tmp"
+
+      # Reuses scripts/k8s/deploy.sh unchanged — same tag-pinning, same
+      # "delete Job/migrate -> apply -> wait Complete -> wait rollouts"
+      # sequence used locally (docs/architecture/cicd.md §3, kubernetes.md §14).
+      # The prod overlay already points at ghcr.io/<owner>/civicpulse-*; the
+      # image tag is the only thing deploy.sh substitutes.
+      - name: Migrate + deploy k8s/overlays/prod at this commit SHA
+        run: scripts/k8s/deploy.sh prod "$IMAGE_TAG"
+
+      - name: Ingress smoke test
+        run: scripts/k8s/smoke-test.sh
+
+      - name: HPA status
+        run: kubectl get hpa -n civicpulse
+
+      - name: Cluster state (on failure)
+        if: failure()
+        run: |
+          kubectl get pods,jobs,events -n civicpulse --sort-by=.lastTimestamp
+          kubectl logs job/migrate -n civicpulse --tail=100 || true
+          kubectl logs deployment/backend -n civicpulse --tail=100 || true

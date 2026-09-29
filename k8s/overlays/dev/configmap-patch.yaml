@@ -1,0 +1,9 @@
+# Dev uses the deterministic simulated triage provider: no API key, no
+# network calls, repeatable results.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: civicpulse-config
+  namespace: civicpulse
+data:
+  TRIAGE_PROVIDER: "simulated"

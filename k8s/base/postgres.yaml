@@ -1,0 +1,122 @@
+# PostgreSQL: a StatefulSet (not a Deployment) because it owns durable state.
+# `volumeClaimTemplates` gives the pod its own PersistentVolumeClaim, and the
+# same volume is re-attached when the pod is deleted and recreated — that is
+# what makes complaints survive `kubectl delete pod postgres-0`.
+# docs/architecture/kubernetes.md §3.
+#
+# `serviceName` must name a Service that governs the pod's network identity.
+# We reuse the normal ClusterIP `postgres` Service below (rather than a
+# headless one) so all four Services stay plain ClusterIP; with one replica
+# nothing depends on per-pod DNS names.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: civicpulse
+    spec:
+      # Kubernetes injects <SERVICE>_PORT=tcp://... env vars for every Service into
+      # every pod; e.g. the `backend` Service would set BACKEND_PORT to a URL and
+      # crash the app's integer BACKEND_PORT setting. Discovery here is by DNS name,
+      # so the injected variables are unused — turn them off.
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: civicpulse-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: civicpulse-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: civicpulse-secrets
+                  key: POSTGRES_PASSWORD
+            # Postgres refuses to initdb into a directory that isn't empty,
+            # and a freshly provisioned volume can contain `lost+found`.
+            # Using a subdirectory of the mount avoids that.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+        labels:
+          app.kubernetes.io/name: postgres
+          app.kubernetes.io/part-of: civicpulse
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # No storageClassName: uses the cluster default (k3d/k3s: local-path).
+        resources:
+          requests:
+            storage: 1Gi
+---
+# ClusterIP only — the database is never a NodePort or LoadBalancer Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

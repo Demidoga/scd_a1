@@ -1,0 +1,77 @@
+# One-off schema migration: same backend image, `alembic upgrade head`.
+#
+# A Job — not an initContainer on the backend pods — so that with ≥2 backend
+# replicas the migration runs exactly once and gives the deploy pipeline a
+# single success/failure signal to wait on. The deploy step MUST delete any
+# existing `job/migrate` before applying this file (a Job's pod template is
+# immutable, so re-applying with a new image SHA fails otherwise):
+#   scripts/k8s/deploy.sh does this, then waits for condition=complete
+#   before it waits on the backend rollout.
+# docs/architecture/database.md §2, docs/architecture/cicd.md §3.
+#
+# `restartPolicy: OnFailure` + `backoffLimit`: if PostgreSQL isn't accepting
+# connections yet, alembic exits non-zero and the container is retried, so no
+# separate wait-for-postgres step is needed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: migrate
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: migrate
+        app.kubernetes.io/component: migration
+        app.kubernetes.io/part-of: civicpulse
+    spec:
+      # Kubernetes injects <SERVICE>_PORT=tcp://... env vars for every Service into
+      # every pod; e.g. the `backend` Service would set BACKEND_PORT to a URL and
+      # crash the app's integer BACKEND_PORT setting. Discovery here is by DNS name,
+      # so the injected variables are unused — turn them off.
+      enableServiceLinks: false
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: civicpulse-backend:REPLACE_WITH_SHA
+          command: ["alembic", "upgrade", "head"]
+          env:
+            # Order matters: $(VAR) expansion only sees variables defined
+            # earlier in this list.
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: civicpulse-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: civicpulse-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: civicpulse-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

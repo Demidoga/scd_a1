@@ -1,0 +1,34 @@
+# Horizontal scaling for the backend (Milestone 8, docs/assignment/12-kubernetes-autoscaling.md).
+# Utilization is usage/request — this is why backend.yaml's resources.requests.cpu
+# is mandatory; without it the HPA sits at <unknown>/60% forever.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+  behavior:
+    scaleUp:
+      # Users are waiting — scale out as soon as the metric crosses the
+      # target, don't wait out a stabilization window first.
+      stabilizationWindowSeconds: 0
+    scaleDown:
+      # Scale-down flapping (evict, then immediately need the pod back) is
+      # more expensive than running a few extra replicas for 5 more minutes.
+      stabilizationWindowSeconds: 300

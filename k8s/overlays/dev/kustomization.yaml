@@ -1,0 +1,23 @@
+# Local k3d cluster. Images are built locally and loaded into the cluster
+# (scripts/k8s/load-images.sh), so names stay unqualified. The tag is a
+# placeholder on purpose: scripts/k8s/deploy.sh substitutes the git SHA at
+# apply time, so no committed file is edited and nothing ever runs `latest`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/external-secret
+
+images:
+  - name: civicpulse-backend
+    newName: civicpulse-backend
+    newTag: REPLACE_WITH_SHA
+  - name: civicpulse-frontend
+    newName: civicpulse-frontend
+    newTag: REPLACE_WITH_SHA
+
+patches:
+  - path: configmap-patch.yaml

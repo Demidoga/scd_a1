@@ -64,6 +64,8 @@ PersistentVolume
 
 A plain Deployment without persistent storage is explicitly a marked failure in the assignment.
 
+`serviceName: postgres` names the Service that governs the StatefulSet's network identity. The manifest reuses the ordinary ClusterIP `postgres` Service for this instead of a headless one, so all four Services are literally `ClusterIP` with a cluster IP. With a single replica nothing relies on per-pod DNS names, so this costs nothing. `PGDATA` points at a subdirectory of the mounted volume because Postgres refuses to initialise into a directory that already contains `lost+found`.
+
 ## 4. Services
 
 All four application/data Services are `ClusterIP`. No database Service may be `NodePort` or `LoadBalancer`. No production Compose host port should expose PostgreSQL or Redis either.
@@ -88,7 +90,11 @@ A K8s `Ingress` object is only routing configuration — it does nothing without
 k3d cluster create civicpulse --port "8080:80@loadbalancer"
 ```
 
-The smoke test then hits `http://localhost:8080/` (frontend) and `http://localhost:8080/api/health` (backend, through the Ingress) directly from the GitHub Actions runner — both share one host/port, matching the same-origin design the frontend relies on. No `/etc/hosts` entry or DNS is needed since the smoke test doesn't depend on a specific `Host` header when only one `Ingress` host rule exists in the cluster.
+The smoke test then hits `http://localhost:8080/` (frontend) and `http://localhost:8080/api/stats` (backend, through the Ingress) directly from the GitHub Actions runner — both share one host/port, matching the same-origin design the frontend relies on. No `/etc/hosts` entry or DNS is needed: `ingress.yaml` deliberately has no `host:` field, so its single rule set answers on any `Host` header.
+
+> **Why `/api/stats`, not a health endpoint.** The backend's `/health` and `/ready` are mounted at the root, not under `/api`, and the Ingress only sends `/api/*` to the backend — so `GET /health` through the Ingress lands on the *frontend*, whose SPA fallback answers `200` with HTML (a false positive). `/api/stats` touches both PostgreSQL and Redis, so a `200 application/json` proves the whole chain. The probes reach `/health` and `/ready` directly on the pod port (not through the Ingress). `scripts/k8s/smoke-test.sh` also checks the `Content-Type` so an accidental route to the frontend can't pass.
+
+**Frontend nginx in Kubernetes.** `frontend/nginx.conf` contains an `/api` proxy block with Docker's embedded resolver (`127.0.0.11`). That block is a Compose-only convenience: in Kubernetes the Ingress sends `/api` straight to the backend Service, so nginx never proxies. The same frontend image runs unchanged in both environments (build once, deploy many).
 
 ## 7. Configuration
 
@@ -99,6 +105,19 @@ Non-secret values such as: provider selection; service hostnames; non-sensitive 
 ### Secret
 
 Sensitive values such as: database password; LLM API key. Committed manifests contain placeholders only. Never treat base64-encoded Kubernetes Secret data as safe to commit when it contains a real credential.
+
+### Secret provisioning
+
+`k8s/base/secret.yaml` (`civicpulse-secrets`, keys `POSTGRES_PASSWORD` and `LLM_API_KEY`, every value `REPLACE_ME`) documents the Secret's shape, but it is never what runs in a cluster. A plain `kubectl apply -k` of a placeholder Secret would overwrite the real credentials on every deploy, so both overlays include the shared component `k8s/components/external-secret`, which removes that placeholder from the rendered output. The real Secret is created out-of-band:
+
+| Where | How |
+|---|---|
+| Local k3d | `scripts/k8s/create-secrets.sh` reads `POSTGRES_PASSWORD` / `LLM_API_KEY` from the gitignored `.env` and applies the Secret. Values go through a process substitution, never argv, and are never printed. |
+| CD (Milestone 9) | The workflow creates the same Secret from GitHub Secrets before applying the overlay. |
+
+`scripts/k8s/deploy.sh` refuses to run if the Secret doesn't exist yet. Two consequences worth knowing: pods read Secret values only at start-up (after changing one, `kubectl rollout restart`), and PostgreSQL reads `POSTGRES_PASSWORD` only when it first initialises an empty volume — changing the Secret later does not change the password of an existing database.
+
+`DATABASE_URL` is assembled in the pod spec from the ConfigMap's `POSTGRES_USER`/`POSTGRES_DB` and the Secret's `POSTGRES_PASSWORD` using `$(VAR)` expansion (which only sees variables defined earlier in the same `env:` list). The password is embedded in a URL, so `create-secrets.sh` rejects passwords containing URL-special characters.
 
 ## 8. Resource requests and limits
 
@@ -254,6 +273,23 @@ This protects against voluntary disruptions removing all backend capacity at onc
 
 ## 14. Deployment and rollback model
 
+### Deploy flow and scripts (`scripts/k8s/`)
+
+Everything below is plain `kubectl`/`docker`/`k3d` wrapped in small scripts, so Milestone 9's CD workflow can reuse the same steps instead of re-inventing them.
+
+| Script | What it does |
+|---|---|
+| `create-cluster.sh` | Creates (or reuses) the k3d cluster `civicpulse`, publishing the Ingress on `localhost:8080`. |
+| `load-images.sh` | Builds both images, tags them with the git SHA (plus a timestamp if the tree is dirty — never `latest`), and imports them into the cluster. |
+| `create-secrets.sh` | Creates the real Secret from `.env` (see §7 *Secret provisioning*). |
+| `deploy.sh <dev\|prod> [tag]` | Pins the image tag through a throwaway kustomization (no committed file is edited), refuses `latest` or unresolved placeholders, deletes any old `Job/migrate`, applies, waits for the Job to be `Complete`, then waits for every rollout. `DRY_RUN=1` just prints the final manifests. |
+| `load-base-images.sh` | Optional. Pulls `postgres`/`redis` with host Docker and loads them into the cluster, for setups where the cluster itself can't reach Docker Hub (pods stuck in `ImagePullBackOff`). |
+| `smoke-test.sh` | Frontend + `/api/stats` + a complaint POST/GET through the Ingress. |
+| `verify-persistence.sh` | Creates a complaint, deletes `postgres-0`, and confirms the complaint is still there. |
+| `validate-manifests.sh` | No cluster needed: renders base + overlays, runs `kubeconform`, then `check_manifest_invariants.py` (the §16 checklist as code). |
+
+Committed manifests carry the placeholder image tag `REPLACE_WITH_SHA`. Applying them without substituting a real tag fails closed (`ImagePullBackOff`) instead of silently running whatever `latest` happens to be (ADR 0003).
+
 ### Fast rollback (imperative)
 
 ```bash
@@ -274,20 +310,20 @@ Both rollback modes should be demonstrated/documented.
 
 ## 16. Invariants checklist
 
-- [ ] Namespace `civicpulse`.
-- [ ] Backend ≥2 replicas.
-- [ ] Frontend ≥2 replicas.
-- [ ] PostgreSQL is a StatefulSet + PVC.
-- [ ] Redis has a PVC and `strategy: Recreate`.
-- [ ] `Job/migrate` completes (`Complete`) before backend rollout is awaited.
-- [ ] Four ClusterIP Services.
-- [ ] Ingress routes `/` and `/api`; k3d/Traefik reachable from CI runner.
-- [ ] ConfigMap/Secret separation.
-- [ ] Committed secrets are placeholders only.
-- [ ] Startup/liveness/readiness probes are semantically correct.
-- [ ] Requests/limits set on every container.
+- [x] Namespace `civicpulse`.
+- [x] Backend ≥2 replicas.
+- [x] Frontend ≥2 replicas.
+- [x] PostgreSQL is a StatefulSet + PVC.
+- [x] Redis has a PVC and `strategy: Recreate`.
+- [x] `Job/migrate` completes (`Complete`) before backend rollout is awaited. (enforced by `scripts/k8s/deploy.sh`; verified live)
+- [x] Four ClusterIP Services.
+- [ ] Ingress routes `/` and `/api`; k3d/Traefik reachable from CI runner. (routes verified live on local k3d via `smoke-test.sh`; reachability from the CI runner is confirmed in Milestone 9)
+- [x] ConfigMap/Secret separation.
+- [x] Committed secrets are placeholders only.
+- [x] Startup/liveness/readiness probes are semantically correct. (verified live: with Redis at 0 replicas, backend pods go `NotReady` and leave the Service endpoints while `RESTARTS` stays 0)
+- [x] Requests/limits set on every container.
 - [ ] HPA v2 configured as required.
 - [ ] Metrics Server installed for HPA evidence.
 - [ ] VPA is `Off`/recommender mode.
-- [ ] Backend PDB has `minAvailable: 1`.
-- [ ] Rolling update is configured for no voluntary unavailable replicas.
+- [x] Backend PDB has `minAvailable: 1`.
+- [x] Rolling update is configured for no voluntary unavailable replicas.
