@@ -20,6 +20,10 @@ from app.providers.triage.rules import RuleBasedTriage
 
 logger = get_logger(__name__)
 
+# The backend runs up to 10 pods (HPA) sharing one LLM quota, so a 429 hits
+# many pods at the same instant. A wide window spreads their single retry out
+# instead of sending them back together; the extra delay only applies to a
+# request that has already failed once.
 _RETRY_JITTER_MIN_SECONDS = 0.5
 _RETRY_JITTER_MAX_SECONDS = 1.5
 
