@@ -1,14 +1,106 @@
 # CivicPulse
 
-Municipal complaint intake + AI triage platform. Backend: FastAPI +
-PostgreSQL + Redis. Frontend: React + Vite + TypeScript.
+[![CI](https://github.com/Demidoga/scd_a1/actions/workflows/ci.yml/badge.svg)](https://github.com/Demidoga/scd_a1/actions/workflows/ci.yml)
+[![CD](https://github.com/Demidoga/scd_a1/actions/workflows/cd.yml/badge.svg)](https://github.com/Demidoga/scd_a1/actions/workflows/cd.yml)
+[![Release](https://github.com/Demidoga/scd_a1/actions/workflows/release.yml/badge.svg)](https://github.com/Demidoga/scd_a1/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Backend
+## The problem
+
+A city receives complaints as free text ("streetlight outside the school
+has been dead for a week"). Someone has to read each one, decide what kind
+of problem it is and how urgent it is, and route it. Done by hand this is
+slow and inconsistent; done naively with an AI model it is fragile, because
+the model can be slow, wrong, rate-limited or down.
+
+CivicPulse is an end-to-end platform for that job. A citizen submits a
+complaint and a location. The backend validates it, classifies it (category,
+priority, one-line summary) through a replaceable *triage provider*, stores
+it in PostgreSQL, and shows it on an operations dashboard where staff move
+it through a fixed status workflow. If the AI provider fails, triage falls
+back to deterministic rules, so a provider outage never becomes an error for
+the citizen. Redis caches statistics and rate-limits submissions so one
+client cannot burn the shared AI quota.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U[Citizen / operator browser] -->|HTTP| FE[frontend<br/>React + nginx]
+    FE -->|same-origin /api proxy| BE[backend<br/>FastAPI]
+    subgraph edge["edge network"]
+        FE
+        BE
+    end
+    subgraph internal["internal network (internal: true, no outbound access)"]
+        PG[(PostgreSQL 16<br/>complaints)]
+        RD[(Redis 7<br/>stats cache, triage cache,<br/>rate limiter)]
+    end
+    BE --> PG
+    BE --> RD
+    BE -->|TRIAGE_PROVIDER=llm| LLM[Groq hosted model]
+    BE -.->|on failure or timeout| RULES[RuleBasedTriage fallback]
+    BE -.->|CI / local default| SIM[SimulatedTriage]
+```
+
+The backend is the only service on both networks, so the frontend
+structurally cannot reach PostgreSQL or Redis. More detail:
+[`docs/architecture.md`](docs/architecture.md).
+
+## Quickstart (one command)
+
+Needs Docker with the Compose plugin. From a fresh clone:
+
+```bash
+cp .env.example .env && docker compose up --build
+```
+
+Then open <http://localhost:8080>. The `migrate` service applies the
+database schema before the backend starts. Without an `LLM_API_KEY` in
+`.env`, triage uses the rule-based provider; set `TRIAGE_PROVIDER=simulated`
+for fully deterministic results. Load 36 sample complaints with:
+
+```bash
+docker compose exec backend python -m app.seed
+```
+
+Running without Docker, on Kubernetes, and load testing are covered further
+down. Operations (deploy, rollback, logs, triage failures):
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
+## API
+
+All endpoints are served by the backend; through the frontend they appear
+under the same origin. Validation errors are `400` with per-field messages.
+
+| Method | Path | Purpose | Notable responses |
+|---|---|---|---|
+| `POST` | `/api/complaints` | Submit and triage a complaint | `201`, `400` invalid, `429` rate limited (`Retry-After`) |
+| `GET` | `/api/complaints` | List with `category`, `priority`, `status` filters, `page`, `page_size` (max 100) and total count | `200` |
+| `GET` | `/api/complaints/{id}` | Fetch one complaint | `200`, `404` |
+| `PATCH` | `/api/complaints/{id}/status` | Move a complaint through the status workflow | `200`, `409` names the illegal transition |
+| `GET` | `/api/stats` | Aggregates by category and priority | `200`, header `X-Cache: HIT` or `MISS` |
+| `GET` | `/api/meta/providers` | Active triage provider and the last 20 outcomes (provider, latency, fallback) | `200` |
+| `GET` | `/health` | Liveness: process is up (does not touch the database) | `200` |
+| `GET` | `/ready` | Readiness: PostgreSQL and Redis reachable | `200`, `503` naming the failed dependency |
+| `GET` | `/metrics` | Prometheus metrics: request count and latency, triage latency, fallback counter | `200` |
+
+Status workflow: `open → in_progress → resolved`, and `open`/`in_progress`
+can go to `rejected`. `resolved` and `rejected` are final.
+
+## Screenshots
+
+Screenshots of the submit, dashboard and stats views are still to be added
+under `docs/evidence/screenshots/`.
+
+## Local development without Docker
+
+### Backend
 
 Requires Python 3.12+, [`uv`](https://docs.astral.sh/uv/), PostgreSQL 16+,
 Redis 7+ running locally.
 
-### macOS / Linux
+#### macOS / Linux
 
 ```bash
 cd backend
@@ -32,7 +124,7 @@ uv run python -m app.seed        # seed sample data
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-### Windows
+#### Windows
 
 PostgreSQL on Windows runs as a native service, not via a Linux user — there
 is no `sudo -u postgres`. Use `psql.exe` directly instead, from PowerShell.
@@ -76,7 +168,7 @@ API docs: `http://localhost:8000/docs`
 Tests: `uv run pytest tests/unit -q` (no DB needed) or
 `uv run pytest tests/ --cov=app -q` (full suite, needs DB + Redis).
 
-## Frontend
+### Frontend
 
 Requires the backend running on `:8000`.
 

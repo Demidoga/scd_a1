@@ -157,14 +157,13 @@ affordable. Both behaviors are unit-tested directly against a
 `backend/tests/unit/test_redis_fail_modes.py`, independent of whether a
 real Redis outage can be reproduced in this environment.
 
-### Hosted-LLM / internal-network topology (decided, not yet built)
+### Hosted-LLM / internal-network topology
 
-`docs/architecture/ai.md` §6 and `docs/Milestones/milestone-1.md` §F2 fix
-the decision that the backend is the only service attached to both the
-`edge` and `internal` Compose networks, so hosted Groq calls leave through
-`edge` while PostgreSQL/Redis stay on `internal: true` with no outbound
-internet path. This is recorded as decided during Milestone 1; the actual
-`compose.yaml` implementing it is Milestone 6 scope and doesn't exist yet.
+Decided in Milestone 1 (`docs/architecture/ai.md` §6) and built in Milestone 6:
+the backend is the only service attached to both networks
+(`compose.yaml:108-113`, `networks: [edge, internal]`), so calls to the hosted
+LLM leave through `edge`, while PostgreSQL and Redis sit on `internal` only
+and have no route out. The full answer is Q7 below.
 
 ---
 
@@ -575,3 +574,175 @@ controller. Run end-to-end in this milestone (see "Live run" above):
 `100m/128Mi` → VPA Target `296m/250Mi` → `resources.requests` updated to
 `300m/256Mi` → re-run showed the HPA topping out at 9/10 replicas instead of
 pinning at 10/10 with CPU still 2-4× over target.
+
+---
+
+## Milestone 9/10 — CI/CD, and the remaining assignment questions
+
+The eight questions from `docs/assignment/15-engineering-notes-questions.md`.
+Q5 and Q6 are answered under Milestone 8 above; Q1–Q4, Q7 and Q8 follow.
+
+### Q1 — Three things that differ between a laptop and a CI runner, and the line that freezes each
+
+1. **The Python and Node runtime.** A laptop runs whatever is installed (this
+   project's dev machine has Python 3.13 in `backend/.venv`; production is 3.12).
+   Frozen by `backend/Dockerfile:8` and `:30` (`FROM python:3.12-slim`) and
+   `frontend/Dockerfile:7` (`FROM node:22-alpine`); CI mirrors the Node version
+   at `.github/workflows/ci.yml` (`node-version: "22"`).
+2. **The database and cache versions.** The dev machine runs PostgreSQL 17 and
+   Redis 8 from the OS package manager; every shipped artifact runs 16 and 7.
+   Frozen by `compose.yaml:19` and `:41` (`postgres:16-alpine`,
+   `redis:7-alpine`), `k8s/base/postgres.yaml:40`, `k8s/base/redis.yaml:56`,
+   and the CI service containers at `.github/workflows/ci.yml:67` and `:80`.
+   CI therefore tests against the same major versions production runs, which a
+   laptop cannot promise.
+3. **Installed dependency versions.** `npm ci` (`frontend/Dockerfile:13`)
+   installs exactly what `frontend/package-lock.json` records, so the
+   frontend is frozen. The backend is **not fully frozen, and this is a known
+   gap**: CI and laptops use `backend/uv.lock`
+   (`ci.yml`, `cache-dependency-glob: backend/uv.lock`), but the image is built
+   with `pip install .` from `pyproject.toml` alone (`backend/Dockerfile:18-21`),
+   so pip resolves the newest allowed versions at build time. The tested
+   dependency set and the shipped one can differ. Fix: export the lock file
+   (`uv export --frozen`) and `pip install -r` it in the builder stage.
+
+Other differences that are frozen on purpose: `TRIAGE_PROVIDER` (Q4), and the
+service hostnames, which are `postgres`/`redis` in `compose.yaml:69,87` and
+`k8s/base/configmap.yaml`, never `localhost`.
+
+### Q2 — Where the pipeline sits on the CI/CD maturity ladder
+
+*Wording note: the lecture slide is not in this repository. The rungs below use
+the common ladder (CI, then continuous delivery, then continuous deployment);
+align the names with Lecture 03 slide 32 before submitting.*
+
+**Rung: continuous delivery, without a persistent production environment.**
+`ci.yml` gates every PR (lint, types, tests, image build, Trivy, kubeconform,
+a Compose integration test). Every merge to `main` runs `cd.yml`, which
+re-tests, builds once, publishes SHA-tagged images to GHCR with an SBOM, and
+deploys that exact SHA to a fresh k3d cluster in the runner and smoke-tests it
+through the Ingress (`cd.yml` jobs `test` → `build-push` → `deploy-k8s`, chained
+by `needs:` at lines 22 and 93). So every commit on `main` yields a tested,
+versioned, deployable artifact that has been proven to deploy. It is not
+continuous *deployment*: the cluster is thrown away when the job ends, so
+nothing serves real users and nothing is promoted automatically.
+
+**Next rung: continuous deployment to a long-lived environment.** It would
+add a persistent cluster that the pipeline updates on every green `main`,
+with automated post-deploy checks and automatic rollback (`kubectl rollout
+undo`, `docs/RUNBOOK.md` §2) if they fail. What it buys: the time from merge
+to running-for-users drops from "someone deploys by hand" to minutes, and
+rollback stops depending on a human noticing. A GitOps controller (Argo CD or
+Flux, listed as a bonus) is the usual way to get there.
+
+### Q3 — The line guaranteeing build-once-deploy-many, and what breaks without it
+
+Two lines work together:
+
+- **The image is built once and tagged with the commit.** `cd.yml:55` and
+  `:67` tag both images `…:${{ github.sha }}`; `deploy-k8s` then deploys the
+  same tag (`cd.yml:97` `IMAGE_TAG: ${{ github.sha }}`, `:154`
+  `scripts/k8s/deploy.sh prod "$IMAGE_TAG"`). The manifests hold only a
+  placeholder (`k8s/base/backend.yaml:51` `civicpulse-backend:REPLACE_WITH_SHA`)
+  that `deploy.sh` replaces and refuses to leave as `latest` (`deploy.sh:35`).
+- **Nothing environment-specific is baked into the image.** The frontend
+  calls same-origin `/api`, and nginx forwards it to the backend
+  (`frontend/nginx.conf:38-39`, `set $backend backend:8000; proxy_pass
+  http://$backend;`). There is no `VITE_API_URL` anywhere in `frontend/src`;
+  environment differences arrive at run time through the ConfigMap and Secret.
+
+Without the second line, the API URL would be compiled into the JavaScript
+bundle, so dev, staging and production would each need their own build. The
+artifact that passed CI would no longer be the artifact that runs in
+production. You would be shipping untested bytes, and "what is production
+running?" would no longer have a single-SHA answer.
+
+### Q4 — What "correct" means for a probabilistic LLM, and how CI stays deterministic
+
+**Correct is a contract, not a string.** Two runs of the model on the same
+complaint may word the summary differently, and that is acceptable. What must
+always hold is that every stored triage result satisfies the `TriageResult`
+schema (`backend/app/domain/triage.py:14-18`: a valid category enum, a valid
+priority enum, `summary` at most 140 characters, `confidence` between 0 and 1);
+that malformed or out-of-range model output is rejected rather than stored;
+that a provider timeout, `429`, `5xx` or bad JSON never becomes a `500`
+(retry once with jitter, then fall back to `RuleBasedTriage` and record
+`triaged_by = rules:fallback` — `backend/app/services/triage.py:64-74`); and
+that complaint text is treated as data, not instructions (guardrail in
+`backend/app/providers/triage/llm.py`, tested by
+`backend/tests/integration/test_prompt_injection.py`). Quality of the
+classification itself is a measured property (cache hit rate, fallback rate on
+`/metrics`), not a pass/fail assertion.
+
+**CI never calls a live model.** `test-backend` sets `TRIAGE_PROVIDER: simulated`
+(`ci.yml:89`), and `SimulatedTriage` is a keyword-based function with no
+network and no randomness, so the same text always yields the same result. The
+LLM provider is tested against mocked HTTP responses
+(`backend/tests/unit/test_llm_provider.py`), and failure handling by injecting a
+provider that always raises (`backend/tests/integration/test_fallback_e2e.py`).
+The Compose integration job pins `TRIAGE_PROVIDER: simulated` explicitly
+(`ci.yml:275-281`) and asserts the exact category for its test complaint.
+
+*A mistake worth recording:* `.env.example` was changed to default to
+`TRIAGE_PROVIDER=llm`, and the integration job copies that file, so for a while
+the "deterministic" integration job depended on the rules fallback and would
+have called Groq had a key been present. It was found while auditing this
+document and fixed by setting the variable in the job.
+
+### Q7 — `internal: true` blocks outbound traffic; how the LLM caller is served
+
+A Compose network marked `internal: true` has no gateway to the outside, so
+a service attached only to it cannot reach the internet. PostgreSQL and Redis
+are exactly the services that should not be able to (`compose.yaml:9-11`), but
+the backend must call the hosted model.
+
+The resolution is that the backend is the bridge: it is attached to both
+networks (`compose.yaml:111-113`, `edge` and `internal`). `edge` gives it a
+route out to the LLM and lets the frontend reach it; `internal` gives it
+PostgreSQL and Redis. The frontend is on `edge` only (`compose.yaml:130-131`),
+so it structurally cannot resolve or reach the database, which is
+demonstrated in `docs/evidence/milestone-6/frontend-db-isolation.txt`.
+
+Kubernetes has no equivalent of `internal: true` by default, and this
+repository adds no NetworkPolicy (`grep NetworkPolicy k8s/` finds nothing).
+There the isolation is that PostgreSQL and Redis are ClusterIP Services with
+no Ingress route, so they are unreachable from outside the cluster, but pods
+inside it could still reach them and pods can still reach the internet.
+A default-deny NetworkPolicy plus an explicit egress rule for the backend
+would be the Kubernetes equivalent, and is the honest next step.
+
+What is not evidenced: a recorded live call from the backend container to
+Groq. The topology allows it, and the fallback covers its absence, but no
+committed log shows a successful hosted call.
+
+### Q8 — The failure
+
+*Draft written from the repository record. The authors should confirm the time
+cost and add what they personally first suspected before submitting.*
+
+**Symptoms.** The first live deploy to k3d failed at the `migrate` Job.
+`alembic` crashed on startup with
+`backend_port: Input should be a valid integer ... 'tcp://10.43.x.x:8000'`.
+Everything had passed static validation (`kubeconform -strict` and the
+invariants script) beforehand.
+
+**What was wrongly believed.** That a manifest that validates is a manifest
+that runs. The schema check can only say the YAML is well formed; it cannot say
+what the environment inside a pod will look like.
+
+**What told the truth.** The crash message itself: the value of `BACKEND_PORT`
+was a URL, not a number. Kubernetes injects `<SERVICE>_PORT=tcp://<ip>:<port>`
+environment variables into every pod for every Service in the namespace, and
+the Service named `backend` therefore produced a `BACKEND_PORT` that collided
+with the application's own integer `BACKEND_PORT` setting. The backend
+Deployment had only escaped because its ConfigMap (`envFrom`) also sets
+`BACKEND_PORT=8000` and explicit values win; the `migrate` Job does not load
+the ConfigMap, so it got the injected value.
+
+**Fix.** `enableServiceLinks: false` on every pod template
+(`k8s/base/backend.yaml:45`), enforced from now on by
+`scripts/k8s/check_manifest_invariants.py:59-60`, since discovery here is by
+DNS name and the injected variables are never used. A second live-only bug of
+the same kind, an nginx `proxy_pass` with a variable silently dropping the URL
+path, is recorded in `docs/progress.md` (Milestone 6).
+
